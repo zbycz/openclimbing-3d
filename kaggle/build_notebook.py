@@ -50,6 +50,10 @@ CFG = dict(
     SFM_WIDTH     = 2400,                  # images are downscaled to this width for SfM + training
     MAX_FEATURES  = 8192,                  # SIFT features per image
     ITERATIONS    = 30000,                 # 3DGS training iterations
+    SAVE_ITERATIONS = [7000, 15000, 30000],  # intermediate saves survive a late OOM
+    # defaults (0.0002 / 15000) densify past what a 16 GB P100 holds for this scene
+    DENSIFY_GRAD_THRESHOLD = 0.0003,
+    DENSIFY_UNTIL_ITER     = 13000,
     WEB_TARGET_MB = 70,                    # size budget for the web splat
     FOCAL_35MM    = 26.0,                  # EXIF 35mm-equivalent focal, used as COLMAP prior
     GS_REPO       = "https://github.com/graphdeco-inria/gaussian-splatting.git",
@@ -211,6 +215,8 @@ stamp("setup", t)
 code(
     r"""
 # Smoke test: does the rasterizer actually run on this GPU (P100 = sm_60)?
+# Runs out-of-process so it leaves no CUDA context behind - the P100's 16 GB are all needed later.
+SMOKE = r'''
 import torch
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 
@@ -231,20 +237,22 @@ torch.manual_seed(0)
 means3D = torch.randn(N, 3, device=dev) * 0.2 + torch.tensor([0., 0., 3.], device=dev)
 means3D.requires_grad_(True)
 means2D = torch.zeros_like(means3D, requires_grad=True)
-out = rasterizer(
+image = rasterizer(
     means3D=means3D, means2D=means2D, shs=None,
     colors_precomp=torch.rand(N, 3, device=dev),
     opacities=torch.rand(N, 1, device=dev),
     scales=torch.full((N, 3), 0.05, device=dev),
     rotations=torch.tensor([[1., 0., 0., 0.]], device=dev).repeat(N, 1),
     cov3D_precomp=None,
-)
-image = out[0]
+)[0]
 image.sum().backward()
-print("rasterizer OK -", GPU, "| image", tuple(image.shape),
+print("rasterizer OK -", torch.cuda.get_device_name(0), "| image", tuple(image.shape),
       "| rendered sum", float(image.sum()), "| grad ok", bool(means3D.grad.abs().sum() > 0))
-del out, image
-torch.cuda.empty_cache()
+'''
+smoke_py = os.path.join(CFG["WORK"], "smoke_test.py")
+with open(smoke_py, "w") as fh:
+    fh.write(SMOKE)
+run([sys.executable, smoke_py], tag="smoke")
 """
 )
 
@@ -366,18 +374,31 @@ t = time.time()
 MODEL = os.path.join(CFG["WORK"], "model")
 env = dict(os.environ)
 env["PYTHONUNBUFFERED"] = "1"
-run([sys.executable, "train.py",
-     "-s", SCENE, "-m", MODEL,
-     "--iterations", CFG["ITERATIONS"],
-     "--save_iterations", CFG["ITERATIONS"],
-     "--test_iterations", "-1",
-     "--disable_viewer",
-     "--data_device", "cuda"],
-    cwd=GS, env=env, tag="train", throttle=30)
+# 16 GB fills up fast on a scene this size; expandable segments reclaim the fragmentation
+# that otherwise strands several GB, and the images live in host RAM instead of VRAM.
+env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+rc = run([sys.executable, "train.py",
+          "-s", SCENE, "-m", MODEL,
+          "--iterations", CFG["ITERATIONS"],
+          "--save_iterations", *[str(i) for i in CFG["SAVE_ITERATIONS"]],
+          "--test_iterations", "-1",
+          "--disable_viewer",
+          "--data_device", "cpu",
+          "--densify_grad_threshold", CFG["DENSIFY_GRAD_THRESHOLD"],
+          "--densify_until_iter", CFG["DENSIFY_UNTIL_ITER"]],
+         cwd=GS, env=env, tag="train", throttle=30, check=False)
 stamp("train", t)
 run(["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv"], tag="gpu", check=False)
-PLY = os.path.join(MODEL, "point_cloud", f"iteration_{CFG['ITERATIONS']}", "point_cloud.ply")
-print(PLY, os.path.getsize(PLY) / 1e6, "MB")
+
+# even if training died late (OOM), export whatever the last saved iteration was
+saved = sorted(int(d.split("_")[1]) for d in os.listdir(os.path.join(MODEL, "point_cloud")))
+assert saved, "training produced no point cloud"
+ITER = saved[-1]
+if rc != 0:
+    print(f"WARNING: train.py exited {rc}; falling back to iteration {ITER}")
+REPORT["train"] = {"exit_code": rc, "iterations": ITER, "saved": saved}
+PLY = os.path.join(MODEL, "point_cloud", f"iteration_{ITER}", "point_cloud.ply")
+print(PLY, round(os.path.getsize(PLY) / 1e6, 1), "MB")
 """
 )
 
