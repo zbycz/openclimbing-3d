@@ -1,0 +1,19 @@
+{
+  "id": "pavelzbytovsk/korno-gaussian-splat",
+  "title": "korno-gaussian-splat",
+  "code_file": "korno-gaussian-splat.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "pavelzbytovsk/korno-rockface-photogrammetry"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": [],
+  "machine_shape": "Gpu"
+}
