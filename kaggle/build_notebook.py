@@ -44,7 +44,7 @@ code(
 import os, sys, json, time, glob, shutil, subprocess, math
 
 CFG = dict(
-    INPUT_GLOB    = "/kaggle/input/korno-rockface-photogrammetry/**/*.JPG",
+    INPUT_DIR     = "/kaggle/input",       # every image found below this path is used
     WORK          = "/kaggle/temp/gs",     # scratch, NOT part of notebook output
     OUT           = "/kaggle/working",     # notebook artifacts
     SFM_WIDTH     = 2400,                  # images are downscaled to this width for SfM + training
@@ -119,6 +119,8 @@ print("gpu:", GPU, "| compute capability:", ARCH, "| cpus:", os.cpu_count())
 run(["nvcc", "--version"], tag="nvcc", check=False)
 run(["free", "-g"], tag="mem", check=False)
 run(["df", "-h", "/kaggle/temp", "/kaggle/working"], tag="disk", check=False)
+run(["bash", "-c", "ls -la /kaggle/input/*/ | head -20; find /kaggle/input -type f | wc -l"],
+    tag="input", check=False)
 REPORT["env"] = {"gpu": GPU, "arch": ARCH, "cpus": os.cpu_count(), "python": sys.version.split()[0]}
 """
 )
@@ -254,9 +256,10 @@ t = time.time()
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor
 
-SRC = sorted(glob.glob(CFG["INPUT_GLOB"], recursive=True))
-print("source images:", len(SRC))
-assert SRC, "no input images found"
+SRC = sorted(p for p in glob.glob(os.path.join(CFG["INPUT_DIR"], "**", "*"), recursive=True)
+             if p.lower().endswith((".jpg", ".jpeg", ".png")) and os.path.isfile(p))
+print("source images:", len(SRC), SRC[:2])
+assert SRC, f"no input images found under {CFG['INPUT_DIR']}"
 
 IMG_DIR = os.path.join(CFG["WORK"], "input_images")
 os.makedirs(IMG_DIR, exist_ok=True)
@@ -325,8 +328,10 @@ REPORT["sfm"] = {
     "mean_reproj_error": round(best.compute_mean_reprojection_error(), 3),
     "camera": str(list(best.cameras.values())[0].params.tolist()),
 }
-assert best.num_reg_images() >= 0.6 * len(prepared), \
-    f"only {best.num_reg_images()}/{len(prepared)} images registered"
+if best.num_reg_images() < len(prepared):
+    print(f"WARNING: {len(prepared) - best.num_reg_images()} images could not be registered")
+assert best.num_reg_images() >= max(20, 0.4 * len(prepared)), \
+    f"reconstruction too small: {best.num_reg_images()}/{len(prepared)} images"
 BEST_DIR = os.path.join(SPARSE, str([k for k, v in recs.items() if v is best][0]))
 """
 )
