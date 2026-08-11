@@ -454,16 +454,28 @@ stamp("export", t)
 code(
     r"""
 # camera hints for the web viewer + the SfM archive
-cams = np.array([im.projection_center() for im in und.images.values() if im.has_pose])
-up = -np.mean([im.cam_from_world().rotation.matrix()[1] for im in und.images.values() if im.has_pose], 0)
+posed = [im for im in und.images.values() if im.has_pose]
+view = np.mean([im.viewing_direction() / np.linalg.norm(im.viewing_direction()) for im in posed], 0)
+view = view / np.linalg.norm(view)
+up = -np.mean([im.cam_from_world().rotation.matrix()[1] for im in posed], 0)
 up = up / np.linalg.norm(up)
-center = np.median(xyz[order[: max(1, keep // 2)]], 0)     # centroid of the solid part of the scene
-eye = np.median(cams, 0)
+
+# frame the dense core of the scene, measured along the viewer camera's own right/up axes
+lo, hi = np.percentile(xyz[sel], [5, 95], axis=0)
+center = (lo + hi) / 2
+right = np.cross(view, up); right /= np.linalg.norm(right)
+cam_up = np.cross(right, view)
+half_w = float(np.abs((hi - lo) / 2 @ np.abs(right)))
+half_h = float(np.abs((hi - lo) / 2 @ np.abs(cam_up)))
+VFOV, ASPECT, MARGIN = np.radians(50), 1.6, 1.15
+dist = MARGIN * max(half_h / np.tan(VFOV / 2), half_w / (ASPECT * np.tan(VFOV / 2)))
+eye = center - view * dist
 REPORT["viewer"] = {
     "cameraUp": [round(float(x), 5) for x in up],
-    "initialCameraPosition": [round(float(x), 4) for x in eye],
-    "initialCameraLookAt": [round(float(x), 4) for x in center],
-    "sceneRadius": round(float(np.percentile(np.linalg.norm(xyz[order[:keep]] - center, axis=1), 90)), 3),
+    "initialCameraPosition": [round(float(x), 3) for x in eye],
+    "initialCameraLookAt": [round(float(x), 3) for x in center],
+    "sceneRadius": round(float(np.linalg.norm(hi - lo) / 2), 3),
+    "splatCount": int(keep),
 }
 print(json.dumps(REPORT["viewer"], indent=1))
 

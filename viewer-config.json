@@ -1,0 +1,19 @@
+{
+  "cameraUp": [
+    -0.00923,
+    -0.99288,
+    -0.11879
+  ],
+  "initialCameraPosition": [
+    -0.088,
+    -0.508,
+    -7.695
+  ],
+  "initialCameraLookAt": [
+    -0.635,
+    -1.617,
+    2.103
+  ],
+  "sceneRadius": 7.364,
+  "splatCount": 2293760
+}

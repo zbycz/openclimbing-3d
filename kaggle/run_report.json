@@ -1,0 +1,89 @@
+{
+  "cfg": {
+    "INPUT_DIR": "/kaggle/input",
+    "WORK": "/kaggle/temp/gs",
+    "OUT": "/kaggle/working",
+    "SFM_WIDTH": 2400,
+    "MAX_FEATURES": 8192,
+    "ITERATIONS": 30000,
+    "SAVE_ITERATIONS": [
+      7000,
+      15000,
+      30000
+    ],
+    "DENSIFY_GRAD_THRESHOLD": 0.0003,
+    "DENSIFY_UNTIL_ITER": 13000,
+    "WEB_TARGET_MB": 70,
+    "FOCAL_35MM": 26.0,
+    "GS_REPO": "https://github.com/graphdeco-inria/gaussian-splatting.git"
+  },
+  "timings": {
+    "torch_setup": 198.8,
+    "setup": 262.5,
+    "prepare_images": 54.2,
+    "sfm_extract": 597.2,
+    "sfm_match": 1045.7,
+    "sfm_map": 620.7,
+    "undistort": 106.4,
+    "train": 4018.5,
+    "export": 3.0
+  },
+  "env": {
+    "gpu": "Tesla P100-PCIE-16GB",
+    "arch": "sm_60",
+    "cpus": 4,
+    "python": "3.12.13",
+    "torch": "2.6.0+cu124"
+  },
+  "gs_commit": "54c035f7834b564019656c3e3fcc3646292f727d",
+  "images": {
+    "count": 103,
+    "width": 2400,
+    "height": 1350,
+    "source_size": [
+      8000,
+      4500
+    ]
+  },
+  "sfm": {
+    "models": 1,
+    "registered": 102,
+    "points3D": 114008,
+    "mean_reproj_error": 1.234,
+    "camera": "[1860.343838846697, 1200.0, 675.0, 0.010629128015477952]"
+  },
+  "train": {
+    "exit_code": 0,
+    "iterations": 30000,
+    "saved": [
+      7000,
+      15000,
+      30000
+    ]
+  },
+  "export": {
+    "gaussians": 3718543,
+    "web_gaussians": 2293760,
+    "full_ply_mb": 922.2,
+    "web_splat_mb": 73.4
+  },
+  "viewer": {
+    "cameraUp": [
+      -0.00923,
+      -0.99288,
+      -0.11879
+    ],
+    "initialCameraPosition": [
+      -0.0221,
+      -0.2716,
+      0.2459
+    ],
+    "initialCameraLookAt": [
+      -0.6363,
+      -0.9775,
+      2.3043
+    ],
+    "sceneRadius": 6.859
+  },
+  "total_seconds": 6913.6
+}
