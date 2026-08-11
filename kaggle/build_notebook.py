@@ -101,25 +101,75 @@ md("## 1. Environment")
 
 code(
     r"""
+# nothing may import torch before the compatibility check in the next cell
+def smi(query):
+    out = subprocess.run(["nvidia-smi", f"--query-gpu={query}", "--format=csv,noheader"],
+                         capture_output=True, text=True).stdout.strip()
+    return out.splitlines()
+
+
 run(["nvidia-smi"], tag="gpu", check=False)
-import torch
-CC = torch.cuda.get_device_capability(0)
-GPU = torch.cuda.get_device_name(0)
-print("torch", torch.__version__, "cuda", torch.version.cuda)
-print("gpu", GPU, "compute capability", CC)
-print("cpus", os.cpu_count())
+GPU = smi("name")[0]
+try:
+    CC = tuple(int(x) for x in smi("compute_cap")[0].split("."))
+except Exception:
+    CC = (7, 0)
+ARCH = f"sm_{CC[0]}{CC[1]}"
+print("gpu:", GPU, "| compute capability:", ARCH, "| cpus:", os.cpu_count())
 run(["nvcc", "--version"], tag="nvcc", check=False)
 run(["free", "-g"], tag="mem", check=False)
 run(["df", "-h", "/kaggle/temp", "/kaggle/working"], tag="disk", check=False)
-REPORT["env"] = {
-    "gpu": GPU, "cc": f"{CC[0]}.{CC[1]}", "torch": torch.__version__,
-    "cuda": torch.version.cuda, "cpus": os.cpu_count(), "python": sys.version.split()[0],
-}
-assert torch.cuda.is_available(), "no GPU - enable the accelerator"
+REPORT["env"] = {"gpu": GPU, "arch": ARCH, "cpus": os.cpu_count(), "python": sys.version.split()[0]}
 """
 )
 
-md("## 2. Dependencies + build the CUDA rasterizer (fail fast before the long steps)")
+md(
+    """
+## 2. PyTorch that can actually talk to a P100
+
+Kaggle's stock PyTorch is compiled for `sm_70`+ only, while the P100 is Pascal (`sm_60`) — every CUDA
+kernel would fail with *"no kernel image is available for execution on the device"*. So roll PyTorch
+back to the newest release whose official wheels still ship Pascal kernels.
+"""
+)
+
+code(
+    r"""
+t = time.time()
+
+
+def torch_probe():
+    out = subprocess.run(
+        [sys.executable, "-c",
+         "import json, torch; print('PROBE' + json.dumps("
+         "{'v': torch.__version__, 'a': torch.cuda.get_arch_list()}))"],
+        capture_output=True, text=True)
+    for line in out.stdout.splitlines():
+        if line.startswith("PROBE"):
+            return json.loads(line[5:])
+    print(out.stdout[-2000:], out.stderr[-2000:])
+    return {"v": None, "a": []}
+
+
+info = torch_probe()
+print("stock torch:", info["v"], info["a"])
+for tv, vv, cu in [("2.6.0", "0.21.0", "cu124"), ("2.5.1", "0.20.1", "cu121")]:
+    if ARCH in info["a"]:
+        break
+    print(f"--- {ARCH} not supported, installing torch {tv} ({cu}) ---", flush=True)
+    run([sys.executable, "-m", "pip", "install", "-q", f"torch=={tv}", f"torchvision=={vv}",
+         "--index-url", f"https://download.pytorch.org/whl/{cu}",
+         "--extra-index-url", "https://pypi.org/simple"],
+        tag=f"torch=={tv}", throttle=20, check=False)
+    info = torch_probe()
+    print("->", info["v"], info["a"])
+assert ARCH in info["a"], f"no available torch build supports {ARCH}"
+REPORT["env"]["torch"] = info["v"]
+stamp("torch_setup", t)
+"""
+)
+
+md("## 3. Dependencies + build the CUDA rasterizer (fail fast before the long steps)")
 
 code(
     r"""
@@ -196,7 +246,7 @@ torch.cuda.empty_cache()
 """
 )
 
-md("## 3. Prepare images (downscale, keep EXIF)")
+md("## 4. Prepare images (downscale, keep EXIF)")
 
 code(
     r"""
@@ -235,7 +285,7 @@ stamp("prepare_images", t)
 """
 )
 
-md("## 4. Structure-from-Motion (COLMAP via pycolmap, CPU)")
+md("## 5. Structure-from-Motion (COLMAP via pycolmap, CPU)")
 
 code(
     r"""
@@ -281,7 +331,7 @@ BEST_DIR = os.path.join(SPARSE, str([k for k, v in recs.items() if v is best][0]
 """
 )
 
-md("## 5. Undistort into a 3DGS-ready dataset")
+md("## 6. Undistort into a 3DGS-ready dataset")
 
 code(
     r"""
@@ -303,7 +353,7 @@ stamp("undistort", t)
 """
 )
 
-md("## 6. Train 3D Gaussian Splatting")
+md("## 7. Train 3D Gaussian Splatting")
 
 code(
     r"""
@@ -326,7 +376,7 @@ print(PLY, os.path.getsize(PLY) / 1e6, "MB")
 """
 )
 
-md("## 7. Export artifacts")
+md("## 8. Export artifacts")
 
 code(
     r"""
