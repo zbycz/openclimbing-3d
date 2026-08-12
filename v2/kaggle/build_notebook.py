@@ -218,6 +218,7 @@ if not os.path.isdir(os.path.join(SPARSE, "0")):
        tag="mapper", throttle=30)
 stamp("sfm_map", t)
 
+shutil.copytree(os.path.join(SPARSE, "0"), os.path.join(CFG["OUT"], "sparse"), dirs_exist_ok=True)
 rec = pycolmap.Reconstruction(os.path.join(SPARSE, "0"))
 print(rec.summary())
 REPORT["sfm"] = {"registered": rec.num_reg_images(), "points3D": rec.num_points3D(),
@@ -275,11 +276,48 @@ code(
     r"""
 t = time.time()
 MESH_PLY = os.path.join(CFG["OUT"], "korno_v2_mesh.ply")
-cm("poisson_mesher", "--input_path", FUSED, "--output_path", MESH_PLY,
-   "--PoissonMeshing.depth", CFG["POISSON_DEPTH"],
-   "--PoissonMeshing.trim", CFG["POISSON_TRIM"],
-   "--PoissonMeshing.num_threads", os.cpu_count(),
-   tag="poisson", throttle=30)
+rc = cm("poisson_mesher", "--input_path", FUSED, "--output_path", MESH_PLY,
+        "--PoissonMeshing.depth", CFG["POISSON_DEPTH"],
+        "--PoissonMeshing.trim", CFG["POISSON_TRIM"],
+        "--PoissonMeshing.num_threads", os.cpu_count(),
+        tag="poisson", throttle=30, check=False)
+
+
+# COLMAP's bundled PoissonRecon can segfault in cleanup after writing a valid mesh
+def ply_is_complete(path):
+    if not os.path.exists(path):
+        return False
+    header, nv, nf = b"", 0, 0
+    with open(path, "rb") as fh:
+        while b"end_header" not in header:
+            chunk = fh.readline()
+            if not chunk:
+                return False
+            header += chunk
+        for line in header.split(b"\n"):
+            if line.startswith(b"element vertex"):
+                nv = int(line.split()[-1])
+            elif line.startswith(b"element face"):
+                nf = int(line.split()[-1])
+        body = len(header)
+    # x,y,z,value floats + rgb bytes per vertex; int count + 3 int indices per face
+    expect = body + nv * (4 * 4 + 3) + nf * (4 + 3 * 4)
+    actual = os.path.getsize(path)
+    print(f"ply check: {nv} verts, {nf} faces, expect {expect} bytes, have {actual}")
+    return actual >= expect
+
+
+if rc != 0 and ply_is_complete(MESH_PLY):
+    print(f"poisson_mesher exited {rc} but wrote a complete mesh - continuing", flush=True)
+elif rc != 0:
+    print("poisson_mesher produced no usable mesh, falling back to open3d", flush=True)
+    pcd = o3d.io.read_point_cloud(FUSED)
+    om, dens = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
+        pcd, depth=CFG["POISSON_DEPTH"] - 1, scale=1.1, n_threads=os.cpu_count())
+    dens = np.asarray(dens)
+    om.remove_vertices_by_mask(dens < np.quantile(dens, CFG["POISSON_TRIM"] / 100.0))
+    o3d.io.write_triangle_mesh(MESH_PLY, om)
+    del pcd, om
 print("raw mesh:", round(os.path.getsize(MESH_PLY) / 1e6, 1), "MB")
 stamp("poisson", t)
 """
