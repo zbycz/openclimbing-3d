@@ -1,0 +1,82 @@
+{
+  "cfg": {
+    "INPUT_DIR": "/kaggle/input",
+    "WORK": "/kaggle/temp/v2",
+    "OUT": "/kaggle/working",
+    "MAMBA": "/kaggle/temp/mm",
+    "SFM_WIDTH": 3200,
+    "MAX_FEATURES": 16384,
+    "STEREO_MAX": 2600,
+    "SRC_VIEWS": 10,
+    "FUSION_MIN_PIXELS": 4,
+    "POISSON_DEPTH": 13,
+    "POISSON_TRIM": 10,
+    "TARGETS": [
+      [
+        "",
+        110,
+        8192
+      ],
+      [
+        "_light",
+        12,
+        2048
+      ]
+    ],
+    "TEX_K": 6,
+    "JPEG_Q": 92
+  },
+  "timings": {
+    "setup": 85.2,
+    "prepare": 60.0,
+    "sfm_extract": 12.8,
+    "sfm_match": 183.8,
+    "sfm_map": 1215.0,
+    "undistort": 155.9,
+    "stereo": 4835.0,
+    "fusion": 212.2,
+    "poisson": 290.5,
+    "clean": 76.9,
+    "uv": 3.5,
+    "export": 1322.2
+  },
+  "images": {
+    "count": 103,
+    "source": [
+      8000,
+      4500
+    ],
+    "sfm": [
+      3200,
+      1800
+    ]
+  },
+  "sfm": {
+    "registered": 102,
+    "points3D": 172952,
+    "mean_reproj_error": 1.345
+  },
+  "mesh": {
+    "triangles": 17050230,
+    "vertices": 8524051
+  },
+  "outputs": {
+    "korno_v2.glb": {
+      "mb": 104.8,
+      "triangles": 3806800,
+      "texture": [
+        8192,
+        4500
+      ]
+    },
+    "korno_v2_light.glb": {
+      "mb": 11.4,
+      "triangles": 415626,
+      "texture": [
+        2048,
+        1124
+      ]
+    }
+  },
+  "total_seconds": 8454.0
+}

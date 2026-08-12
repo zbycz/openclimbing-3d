@@ -67,9 +67,10 @@ CFG = dict(
     POISSON_TRIM  = 10,
 
     # (name, budget MB, texture width)
-    TARGETS = [("", 110, 8192), ("_light", 12, 2048)],
+    # 92 MiB keeps the main model under GitHub's hard 100 MiB per-file limit
+    TARGETS = [("", 92, 8192), ("_light", 12, 2048)],
     TEX_K   = 6,
-    JPEG_Q  = 92,
+    JPEG_Q  = 95,
 )
 os.makedirs(CFG["WORK"], exist_ok=True)
 os.makedirs(CFG["OUT"], exist_ok=True)
@@ -418,6 +419,21 @@ code(
     r"""
 t = time.time()
 BYTES = 1024 * 1024
+
+# trimesh's gltf exporter says "don't re-encode JPEGs" but still calls img.save(format="JPEG"),
+# which lands on PIL's default quality 75 with 4:2:0 chroma subsampling. On rock that throws away
+# exactly the high-frequency contrast that shows cracks, so force a high-quality encode.
+_pil_save = Image.Image.save
+
+
+def _save_hq(self, fp, format=None, **kw):
+    if (format or self.format) == "JPEG":
+        kw.setdefault("quality", CFG["JPEG_Q"])
+        kw.setdefault("subsampling", 0)
+    return _pil_save(self, fp, format=format, **kw)
+
+
+Image.Image.save = _save_hq
 
 
 def export(path, m, texture):

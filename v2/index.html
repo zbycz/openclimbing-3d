@@ -18,6 +18,8 @@
                user-select: none; }
   #hud input { vertical-align: middle; margin-right: 6px; }
   #hint { margin-top: 9px; color: #6b7480; font-size: 12px; }
+  #quality { margin-top: 6px; font-size: 12px; }
+  #quality a { color: #8fb3e8; }
   #status { position: fixed; inset: 0; display: grid; place-content: center; place-items: center; gap: 10px;
             text-align: center; z-index: 20; pointer-events: none; }
   #status.hidden { display: none; }
@@ -42,6 +44,7 @@
   <label><input type="checkbox" id="cams"> show camera positions</label>
   <label><input type="checkbox" id="lit" checked> studio light</label>
   <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
+  <p id="quality"></p>
 </div>
 
 <div id="status"><div id="bar"><i></i></div><div id="msg">loading…</div></div>
@@ -53,6 +56,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 const params = new URLSearchParams(location.search);
 const FILE = params.get('f') || 'korno_v2.glb';
+const LIGHT = 'korno_v2_light.glb';
+document.getElementById('quality').innerHTML = FILE === LIGHT
+  ? '<a href="?">full detail (90 MB)</a>'
+  : `<a href="?f=${LIGHT}">lighter version (11 MB)</a>`;
 
 const statusEl = document.getElementById('status');
 const msgEl = document.getElementById('msg');
