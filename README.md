@@ -4,6 +4,12 @@
 
 **Live viewer: https://zbycz.github.io/openclimbing-3d/**
 
+Two independent reconstructions of the same wall:
+
+* **v1** (this folder) — 3D Gaussian Splatting, then a mesh derived from it.
+* **[v2](v2/)** — classic dense MVS photogrammetry straight from the photos, no splatting.
+  [viewer](https://zbycz.github.io/openclimbing-3d/v2/)
+
 | | |
 |---|---|
 | photos | [korno-rockface-photogrammetry](https://www.kaggle.com/datasets/pavelzbytovsk/korno-rockface-photogrammetry) (Kaggle dataset, 103 × 8000×4500) |
