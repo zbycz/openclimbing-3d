@@ -1,0 +1,105 @@
+{
+  "cfg": {
+    "INPUT_DIR": "/kaggle/input",
+    "WORK": "/kaggle/temp/mesh",
+    "OUT": "/kaggle/working",
+    "MIN_OPACITY": 0.3,
+    "MIN_SEEN": 8,
+    "MAX_SCALE": 0.1,
+    "VOXEL": 0.004,
+    "POISSON_DEPTH": 11,
+    "DENSITY_QUANTILE": 0.02,
+    "TAUBIN_ITERS": 12,
+    "TARGETS": [
+      [
+        "100mb",
+        100,
+        8192
+      ],
+      [
+        "50mb",
+        50,
+        4096
+      ],
+      [
+        "10mb",
+        10,
+        2048
+      ]
+    ],
+    "TEX_K": 8,
+    "JPEG_Q": 90
+  },
+  "timings": {
+    "setup": 30.3,
+    "load_ply": 6.9,
+    "filter": 17.2,
+    "normals": 11.5,
+    "poisson": 132.4,
+    "uv": 1.2,
+    "export": 415.1
+  },
+  "filter": {
+    "gaussians": 3718543,
+    "kept": 1378121,
+    "seen_median": 19.0
+  },
+  "mesh": {
+    "triangles": 5592748,
+    "vertices": 2776566
+  },
+  "outputs": {
+    "100mb": {
+      "file": "korno_mesh_100mb.glb",
+      "mb": 95.4,
+      "triangles": 3403123,
+      "vertices": 1686806,
+      "texture": [
+        8192,
+        3932
+      ]
+    },
+    "50mb": {
+      "file": "korno_mesh_50mb.glb",
+      "mb": 47.6,
+      "triangles": 1732912,
+      "vertices": 853036,
+      "texture": [
+        4096,
+        1964
+      ]
+    },
+    "10mb": {
+      "file": "korno_mesh_10mb.glb",
+      "mb": 9.8,
+      "triangles": 365597,
+      "vertices": 166813,
+      "texture": [
+        2048,
+        984
+      ]
+    }
+  },
+  "viewer": {
+    "center": [
+      -0.886,
+      -1.016,
+      2.309
+    ],
+    "cameraUp": [
+      -0.00955,
+      -0.99355,
+      -0.11295
+    ],
+    "viewDir": [
+      -0.05532,
+      -0.11226,
+      0.99214
+    ],
+    "extent": [
+      13.482,
+      6.471
+    ]
+  },
+  "total_seconds": 615.5
+}
