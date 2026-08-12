@@ -2,77 +2,126 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Korno rockface — 3D</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Korno rockface — 3D Gaussian Splatting</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E🧗%3C/text%3E%3C/svg%3E">
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; background: #0b0d10; color: #e8eaed;
-               font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 20px 72px; }
-  h1 { margin: 0 0 6px; font-size: 26px; font-weight: 650; letter-spacing: -.01em; }
-  .lede { margin: 0 0 4px; color: #9aa3ad; }
-  .meta { margin: 0 0 34px; color: #6b7480; font-size: 13.5px; }
-  .meta a { color: #6b7480; }
-
-  h2 { margin: 34px 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .09em;
-       text-transform: uppercase; color: #6b7480; }
-
-  .card { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 18px;
-          padding: 15px 18px; margin-bottom: 10px; text-decoration: none; color: inherit;
-          background: #14181d; border: 1px solid #232931; border-radius: 11px;
-          transition: border-color .15s, background .15s, transform .15s; }
-  .card:hover { background: #181d23; border-color: #3a4552; transform: translateY(-1px); }
-  .card .name { font-weight: 600; }
-  .card .size { color: #9aa3ad; font-variant-numeric: tabular-nums; font-size: 13.5px; white-space: nowrap; }
-  .card .desc { grid-column: 1 / -1; color: #7d8792; font-size: 13.5px; }
-
-  .note { margin-top: 30px; padding-top: 20px; border-top: 1px solid #1e242b;
-          color: #6b7480; font-size: 13.5px; }
-  .note a { color: #8fb3e8; }
-  code { background: #14181d; border: 1px solid #232931; border-radius: 5px;
-         padding: 1px 5px; font-size: 12.5px; }
+  html, body { margin: 0; height: 100%; background: #0b0d10; color: #e8eaed; overflow: hidden;
+               font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #hud { position: fixed; left: 12px; top: 12px; z-index: 10; max-width: min(340px, calc(100vw - 24px));
+         background: rgba(12, 15, 20, .72); backdrop-filter: blur(8px);
+         border: 1px solid rgba(255, 255, 255, .1); border-radius: 10px; padding: 12px 14px; }
+  #hud h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  #hud p { margin: 0; color: #9aa3ad; font-size: 12.5px; }
+  #hud details { margin-top: 8px; }
+  #hud summary { cursor: pointer; color: #9aa3ad; font-size: 12.5px; }
+  #hud dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0 0; font-size: 12.5px; }
+  #hud dt { color: #9aa3ad; } #hud dd { margin: 0; }
+  #status { position: fixed; inset: 0; display: grid; place-content: center; place-items: center; gap: 10px;
+            text-align: center; z-index: 20; pointer-events: none; }
+  #status.hidden { display: none; }
+  #bar { width: 220px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; background: #6ea8fe; transition: width .2s; }
+  #msg { color: #9aa3ad; font-size: 13px; }
+  #msg.error { color: #ff8b8b; max-width: 80vw; pointer-events: auto; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
 </head>
 <body>
-<div class="wrap">
+<div id="stage"></div>
+
+<div id="hud">
   <h1>Korno rockface</h1>
-  <p class="lede">A limestone face reconstructed in 3D from 103 drone photos.</p>
-  <p class="meta">
-    Photogrammetry &rarr; 3D Gaussian Splatting &rarr; textured mesh ·
-    <a href="https://github.com/zbycz/openclimbing-3d">source on GitHub</a>
-  </p>
-
-  <h2>Textured mesh</h2>
-
-  <a class="card" href="mesh.html?f=korno_mesh_10mb.glb">
-    <span class="name">Light</span><span class="size">9.8 MB</span>
-    <span class="desc">366k triangles. Loads in a second, fine on a phone.</span>
-  </a>
-  <a class="card" href="mesh.html?f=korno_mesh_50mb.glb">
-    <span class="name">Balanced</span><span class="size">47.6 MB</span>
-    <span class="desc">1.7M triangles. The one to look at first.</span>
-  </a>
-  <a class="card" href="mesh.html?f=korno_mesh_100mb.glb">
-    <span class="name">Full detail</span><span class="size">95.4 MB</span>
-    <span class="desc">3.4M triangles and an 8192&times;3932 texture.</span>
-  </a>
-
-  <h2>Gaussian splat</h2>
-
-  <a class="card" href="splat.html">
-    <span class="name">Original splat</span><span class="size">73 MB</span>
-    <span class="desc">The raw radiance field — softer and hazier off-axis, but it keeps the fine
-      detail and the view-dependent light that the mesh flattens away.</span>
-  </a>
-
-  <p class="note">
-    Built from a <a href="https://www.kaggle.com/datasets/pavelzbytovsk/korno-rockface-photogrammetry">Kaggle
-    dataset</a> of 103 &times; 8000&times;4500 drone photos: COLMAP for camera poses, then 3D Gaussian
-    Splatting trained on a Tesla P100, then Poisson surface reconstruction into the meshes above.
-    Both notebooks live in <code>kaggle/</code> in the repo.
-  </p>
+  <p>3D Gaussian Splatting from drone photos</p>
+  <details>
+    <summary>details &amp; controls</summary>
+    <dl id="meta"></dl>
+    <p style="margin-top:8px">Drag to orbit · right-drag or two fingers to pan · scroll to zoom</p>
+  </details>
 </div>
+
+<div id="status"><div id="bar"><i></i></div><div id="msg">loading viewer…</div></div>
+
+<script type="module">
+import * as GaussianSplats3D from 'https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js';
+
+const params = new URLSearchParams(location.search);
+const SPLAT = params.get('url') || 'korno_web.splat';
+
+const statusEl = document.getElementById('status');
+const msgEl = document.getElementById('msg');
+const barEl = document.querySelector('#bar i');
+
+const setProgress = (pct, text) => {
+  barEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  if (text) msgEl.textContent = text;
+};
+const fail = (err) => {
+  console.error(err);
+  document.getElementById('bar').style.display = 'none';
+  msgEl.className = 'error';
+  msgEl.textContent = 'Could not load the splat: ' + (err && err.message ? err.message : err);
+};
+
+const defaults = {
+  cameraUp: [0, -1, 0],
+  initialCameraPosition: [0, 0, -4],
+  initialCameraLookAt: [0, 0, 0],
+};
+
+async function loadConfig() {
+  try {
+    const res = await fetch('viewer-config.json', { cache: 'no-cache' });
+    if (!res.ok) return defaults;
+    return Object.assign({}, defaults, await res.json());
+  } catch {
+    return defaults;
+  }
+}
+
+function fillMeta(cfg) {
+  const dl = document.getElementById('meta');
+  const rows = {
+    file: SPLAT,
+    splats: cfg.splatCount ? cfg.splatCount.toLocaleString('en-US') : '—',
+    source: '103 drone photos',
+  };
+  dl.innerHTML = Object.entries(rows)
+    .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+}
+
+const cfg = await loadConfig();
+fillMeta(cfg);
+setProgress(4, 'loading splats…');
+
+const viewer = new GaussianSplats3D.Viewer({
+  rootElement: document.getElementById('stage'),
+  cameraUp: cfg.cameraUp,
+  initialCameraPosition: cfg.initialCameraPosition,
+  initialCameraLookAt: cfg.initialCameraLookAt,
+  // GitHub Pages is not cross-origin isolated, so SharedArrayBuffer is unavailable
+  sharedMemoryForWorkers: false,
+  dynamicScene: false,
+  antialiased: true,
+  showLoadingUI: false,
+  useBuiltInControls: true,
+});
+
+try {
+  await viewer.addSplatScene(SPLAT, {
+    splatAlphaRemovalThreshold: 5,
+    showLoadingUI: false,
+    progressiveLoad: true,
+    onProgress: (pct, msg, stage) => setProgress(pct, msg || 'loading splats…'),
+  });
+  statusEl.classList.add('hidden');
+  viewer.start();
+} catch (err) {
+  fail(err);
+}
+</script>
 </body>
 </html>

@@ -9,7 +9,7 @@
 | photos | [korno-rockface-photogrammetry](https://www.kaggle.com/datasets/pavelzbytovsk/korno-rockface-photogrammetry) (Kaggle dataset, 103 × 8000×4500) |
 | splat | [`kaggle/splat/`](kaggle/splat) — COLMAP SfM → 3DGS training on a Kaggle P100 |
 | mesh | [`kaggle/mesh/`](kaggle/mesh) — splat → textured glTF on a Kaggle CPU kernel |
-| viewers | [`index.html`](index.html) hub, [`mesh.html`](mesh.html) (three.js), [`splat.html`](splat.html) ([@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D)) |
+| viewer | [`index.html`](index.html) — [@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D) |
 
 ## Notebooks
 
@@ -53,6 +53,9 @@ Turns `korno_full.ply` into an ordinary triangle mesh. All CPU work, so it runs 
 | `korno_mesh_10mb.glb` | 9.8 MB | 366 k | 2048 × 984 |
 | `korno_mesh_50mb.glb` | 47.6 MB | 1.73 M | 4096 × 1964 |
 | `korno_mesh_100mb.glb` | 95.4 MB | 3.40 M | 8192 × 3932 |
+
+The published site is the splat only; the meshes are committed but nothing links to them. To look at one,
+open `mesh.html?f=korno_mesh_50mb.glb` directly.
 
 Two decisions worth knowing about:
 
