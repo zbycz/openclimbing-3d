@@ -52,6 +52,10 @@ CFG = dict(
     RATIO         = 0.75,   # Lowe ratio test
     MIN_INLIERS   = 40,     # below this the two photos are not the same shot
     MAX_RAY_LEN   = 40.0,
+
+    DENSIFY_STEP  = 0.0025, # sample the path this often (fraction of the photo) before ray-casting
+    LIFT_FRAC     = 0.005,  # clearance above the rock, as a fraction of the scene size
+    SIMPLIFY_FRAC = 0.4,    # drop resampled points whose chord error stays under this * lift
 )
 os.makedirs(CFG["WORK"], exist_ok=True)
 os.makedirs(CFG["OUT"], exist_ok=True)
@@ -152,9 +156,12 @@ for r in rows:
         kinds[q["type"]] += 1
     if len(pts) < 2:
         continue
+    # the viewer colours by grade, and gradeColors is keyed on UIAA - so say which system this is
+    gk = [k for k in tags if k.startswith("climbing:grade:")]
     routes[img].append({"name": r["nameRaw"] or tags.get("name"),
-                        "grade": r["gradeTxt"], "osmId": r["osmId"],
-                        "path": pts, "url": tags.get("website")})
+                        "grade": tags[gk[0]] if gk else r["gradeTxt"],
+                        "gradeSystem": gk[0].split(":")[2] if gk else None,
+                        "osmId": r["osmId"], "path": pts, "url": tags.get("website")})
 print("point types:", dict(kinds))
 for img, rs in sorted(routes.items(), key=lambda kv: -len(kv[1])):
     print(f"  {len(rs):3d} routes on {img}")
@@ -261,7 +268,22 @@ print("\nmatching", round(time.time() - t, 1), "s")
 """
 )
 
-md("## 3. Project the route paths onto the mesh")
+md(
+    """
+## 3. Project the route paths onto the mesh
+
+A route is drawn as a handful of points, but the straight line between two of them is a *chord* — over a
+bulge in the rock the chord passes inside the wall, which is why the earlier version disappeared into the
+face in places. So the path is resampled every 0.25 % of the photo before casting, and every sample gets
+its own ray. The resulting polyline follows the surface instead of cutting corners.
+
+Then it is lifted clear of the surface along the mesh normal (oriented towards the camera), and each lifted
+point is checked by casting back from the camera: if anything is still in front of it, the lift is doubled
+until it is free. Finally a Douglas–Peucker pass drops the samples that were not doing any work, with a
+tolerance below the lift, so a straight stretch costs a handful of points and the chord error can never eat
+through the clearance.
+"""
+)
 
 code(
     r"""
@@ -271,9 +293,51 @@ IMS = {im.name: im for im in rec.images.values() if im.has_pose}
 mesh = o3d.io.read_triangle_mesh(MESH_PLY)
 scene = o3d.t.geometry.RaycastingScene()
 scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(mesh))
+ext = mesh.get_max_bound() - mesh.get_min_bound()
+SCENE = float(max(ext[0], ext[1]))
+LIFT = SCENE * CFG["LIFT_FRAC"]
+SIMP = LIFT * CFG["SIMPLIFY_FRAC"]
 print("mesh", len(mesh.triangles), "triangles | posed images", len(IMS))
+print(f"scene {SCENE:.2f} units -> lift {LIFT:.3f}, simplify tolerance {SIMP:.3f}")
+
+
+def densify(q, step):
+    # resample the polyline in photo space; returns the samples and where the original points landed
+    out, nodes = [q[0]], [0]
+    for a, b in zip(q[:-1], q[1:]):
+        n = max(1, int(np.ceil(np.linalg.norm(b - a) / step)))
+        out.extend(a + (b - a) * (k / n) for k in range(1, n + 1))
+        nodes.append(len(out) - 1)
+    return np.array(out), nodes
+
+
+def rdp(P, eps):
+    keep = np.zeros(len(P), bool)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(P) - 1)]
+    while stack:
+        i, j = stack.pop()
+        if j <= i + 1:
+            continue
+        ab = P[j] - P[i]
+        L = np.linalg.norm(ab)
+        w = P[i + 1:j] - P[i]
+        d = np.linalg.norm(w, axis=1) if L < 1e-9 else np.linalg.norm(w - np.outer(w @ (ab / L), ab / L), axis=1)
+        k = int(np.argmax(d))
+        if d[k] > eps:
+            keep[i + 1 + k] = True
+            stack += [(i, i + 1 + k), (i + 1 + k, j)]
+    return keep
+
+
+def cast(origins, dirs):
+    arr = np.hstack([np.asarray(origins, np.float32), np.asarray(dirs, np.float32)])
+    res = scene.cast_rays(o3d.core.Tensor(arr, dtype=o3d.core.Dtype.Float32))
+    return res["t_hit"].numpy().astype(np.float64), res["primitive_normals"].numpy().astype(np.float64)
+
 
 out_routes = []
+stuck = 0
 for title, m in matches.items():
     name = m["drone"]
     if name not in IMS:
@@ -286,31 +350,78 @@ for title, m in matches.items():
 
     for route in routes[title]:
         p = np.array([[q["x"], q["y"]] for q in route["path"]], np.float64)   # normalised, Commons photo
-        q = cv2.perspectiveTransform(p.reshape(-1, 1, 2), H).reshape(-1, 2)   # -> normalised in the drone photo
+        node_q = cv2.perspectiveTransform(p.reshape(-1, 1, 2), H).reshape(-1, 2)  # -> normalised, drone photo
+        q, node_at = densify(node_q, CFG["DENSIFY_STEP"])
+
         inside = (q[:, 0] > -0.02) & (q[:, 0] < 1.02) & (q[:, 1] > -0.02) & (q[:, 1] < 1.02)
         pix = np.stack([q[:, 0] * cam.width, q[:, 1] * cam.height], 1)
         rays = np.asarray(cam.cam_ray_from_img(pix)) @ R
         rays /= np.linalg.norm(rays, axis=1, keepdims=True)
-        arr = np.hstack([np.tile(centre, (len(rays), 1)).astype(np.float32), rays.astype(np.float32)])
-        hit = scene.cast_rays(o3d.core.Tensor(arr, dtype=o3d.core.Dtype.Float32))["t_hit"].numpy()
+        origins = np.tile(centre, (len(rays), 1))
+        hit, nrm = cast(origins, rays)
         ok = np.isfinite(hit) & (hit < CFG["MAX_RAY_LEN"]) & inside
         if ok.sum() < 2:
             continue
-        pts3d = np.tile(centre, (len(rays), 1))[ok] + rays[ok] * hit[ok, None]
+        surf = origins[ok] + rays[ok] * hit[ok, None]
+
+        # thin out the samples, but never drop an original point of the path
+        idx = np.nonzero(ok)[0]
+        pos = {j: i for i, j in enumerate(idx)}
+        marks = sorted({pos[j] for j in node_at if j in pos} | {0, len(surf) - 1})
+        keep = np.zeros(len(surf), bool)
+        for a, b in zip(marks[:-1], marks[1:]):
+            keep[a:b + 1] |= rdp(surf[a:b + 1], SIMP)
+        keep[marks] = True
+
+        surf, n = surf[keep], nrm[ok][keep]
+        d = rays[ok][keep]
+        n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
+        n[np.einsum("ij,ij->i", n, d) > 0] *= -1           # orient the normal back towards the camera
+        n = np.where(np.isfinite(n).all(1, keepdims=True), n, -d)
+
+        # lift clear of the rock, then verify against the mesh and push harder where it is still buried
+        scale = np.full(len(surf), LIFT)
+        for _ in range(5):
+            P = surf + n * scale[:, None]
+            v = P - centre
+            L = np.linalg.norm(v, axis=1)
+            dirs = v / L[:, None]
+            th, _ = cast(np.tile(centre, (len(P), 1)), dirs)
+            buried = np.isfinite(th) & (th < L - 1e-4)
+            if not buried.any():
+                break
+            scale[buried] *= 2.0
+        if buried.any():
+            # last resort: sit just in front of whatever is still occluding the point
+            back = np.maximum(th[buried] - LIFT, th[buried] * 0.5)
+            P[buried] = centre + dirs[buried] * back[:, None]
+            stuck += int(buried.sum())
+
+        nodes = []
+        for j, at in enumerate(node_at):
+            if at in pos and keep[pos[at]]:
+                nodes.append({"index": int(keep[:pos[at]].sum()),
+                              "type": route["path"][j]["type"],
+                              "dotted_after": route["path"][j]["dotted_after"]})
         out_routes.append({
-            "name": route["name"], "grade": route["grade"], "osmId": route["osmId"],
+            "name": route["name"], "grade": route["grade"],
+            "gradeSystem": route["gradeSystem"], "osmId": route["osmId"],
             "url": route["url"], "photo": title, "drone_photo": name,
-            "points": [[round(float(x), 4) for x in p] for p in pts3d],
-            "points_2d": [[round(float(a), 4), round(float(b), 4)] for a, b in q[ok]],
-            "types": [route["path"][i]["type"] for i in np.nonzero(ok)[0]],
-            "dotted_after": [route["path"][i]["dotted_after"] for i in np.nonzero(ok)[0]],
-            "dropped": int((~ok).sum()),
+            "points": [[round(float(x), 4) for x in a] for a in P],
+            "points_2d": [[round(float(a), 4), round(float(b), 4)] for a, b in q[ok][keep]],
+            "nodes": nodes,
+            "types": [nd["type"] for nd in nodes],
+            "dotted_after": [nd["dotted_after"] for nd in nodes],
+            "samples": int(ok.sum()),
+            "dropped": int(len(node_at) - len(nodes)),
         })
 
 print(f"\n{len(out_routes)} routes projected")
 for r in sorted(out_routes, key=lambda r: -len(r["points"]))[:20]:
-    print(f"   {str(r['name'])[:28]:28s} {str(r['grade']):8s} {len(r['points'])} pts"
+    print(f"   {str(r['name'])[:28]:28s} {str(r['grade']):8s} {len(r['nodes'])} nodes -> "
+          f"{r['samples']:4d} samples -> {len(r['points']):3d} points"
           f"{'  (' + str(r['dropped']) + ' dropped)' if r['dropped'] else ''}")
+print(f"points still occluded after 5 doublings of the lift: {stuck}")
 print("project", round(time.time() - t, 1), "s")
 """
 )
@@ -338,8 +449,8 @@ for title, m in matches.items():
             continue
         pts = (np.array(r["points_2d"]) * [img.shape[1], img.shape[0]]).astype(np.int32)
         cv2.polylines(img, [pts], False, (0, 90, 255), 6, cv2.LINE_AA)
-        for p in pts:
-            cv2.circle(img, tuple(p), 9, (0, 220, 255), -1)
+        for nd in r["nodes"]:
+            cv2.circle(img, tuple(pts[nd["index"]]), 9, (0, 220, 255), -1)
         cv2.putText(img, str(r["name"]), tuple(pts[0]), cv2.FONT_HERSHEY_SIMPLEX, 1.4,
                     (255, 255, 255), 3, cv2.LINE_AA)
     h = 1600
