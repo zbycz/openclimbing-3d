@@ -1,0 +1,20 @@
+{
+  "id": "pavelzbytovsk/korno-bolts-3d",
+  "title": "korno-bolts-3d",
+  "code_file": "korno-bolts-3d.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [],
+  "kernel_sources": [
+    "pavelzbytovsk/korno-bolts-infer",
+    "pavelzbytovsk/korno-v2-mvs"
+  ],
+  "competition_sources": [],
+  "model_sources": [],
+  "machine_shape": "None"
+}
