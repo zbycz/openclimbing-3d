@@ -155,12 +155,17 @@ chord across a bulge runs inside the wall. The fix is three steps:
 
 Colours come from openclimbing's own palette (`gradeData.ts`, dark mode): teal to red as the grade rises,
 `#555` for a route with no grade, each stroke outlined in its contrasting colour the way
-`PathWithBorder.tsx` does — without that the ungraded grey vanishes against grey rock. The outline needs a
-generous `polygonOffset`: it is the same polyline as the line it outlines, and at this scene's near/far
-ratio the default depth precision leaves it z-fighting, which chops the line into dashes.
+`PathWithBorder.tsx` does — without that the ungraded grey vanishes against grey rock.
 
-Labels are laid out on a 2D overlay instead of as sprites, so they can be measured against each other. The
-routes start within a few metres of one another, so a label is drawn only where its box is clear of the
-ones already placed — zooming in spreads the starts apart and the rest appear one by one. A second pass
-widens a label to include the route's name wherever that still fits, which in practice means zoomed in
-close.
+That outline is the same polyline as the line it outlines, so the two z-fight and the line breaks into
+dashes. `polygonOffset` only papers over it: the depth error grows as you zoom in and the dashes come back.
+Instead the outline group is **scaled about the camera** every frame — every point moves straight away from
+the eye, so the screen position is untouched but there is real distance between the two strokes. The step
+is capped at half the clearance the kernel lifted the line by, so the outline can never sink into the rock.
+
+Labels are laid out on a 2D overlay instead of as sprites, so they can be measured against each other. Each
+one hangs off the foot of its route and stays there; a label is drawn only where its box is clear of the
+ones already placed, so zooming in — which spreads the feet apart on screen — reveals the rest one by one.
+A second pass widens a label to include the route's name wherever that still fits. Clicking one opens the
+route on openclimbing; the overlay stays pointer-transparent and the click is hit-tested against the boxes
+drawn last frame, so an orbit that happens to end on a label does not navigate away.

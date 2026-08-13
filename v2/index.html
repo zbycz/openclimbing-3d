@@ -56,14 +56,14 @@
   </div>
   <div id="hudbody">
   <p id="sub">dense photogrammetry</p>
-  <label><input type="checkbox" id="routes"> show climbing routes</label>
-  <label id="routeNamesRow"><input type="checkbox" id="routeNames" checked> &nbsp;grades</label>
+  <label><input type="checkbox" id="routes" checked> show climbing routes</label>
+  <label id="routeNamesRow"><input type="checkbox" id="routeNames"> &nbsp;grades</label>
   <label><input type="checkbox" id="bolts"> show bolts</label>
   <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
   <label><input type="checkbox" id="lit" checked> studio light</label>
   <label><input type="checkbox" id="invert"> invert mouse axes</label>
-  <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
+  <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom<br>Click a grade to open its route</p>
   <p id="quality"></p>
   </div>
 </div>
@@ -155,7 +155,6 @@ addEventListener('resize', () => {
 
 // ---- route overlay --------------------------------------------------------
 const routeGroup = new THREE.Group();
-routeGroup.visible = false;
 scene.add(routeGroup);
 const routeToggle = document.getElementById('routes');
 routeToggle.addEventListener('change', e => { routeGroup.visible = e.target.checked; });
@@ -183,20 +182,32 @@ function contrastColor(hex) {
   return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? 0x000000 : 0xffffff;
 }
 
-function fatLine(pts, colour, width, order, behind) {
+function fatLine(pts, colour, width, order) {
   const geom = new LineGeometry();
   geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
   const lm = new LineMaterial({ color: colour, linewidth: width });
   lm.resolution.set(innerWidth, innerHeight);
-  // Both strokes are the same polyline, so the outline z-fights with the line it is outlining and
-  // breaks it into dashes. The camera's near/far span leaves little depth precision out here, so the
-  // offset has to be generous - 2/4 still speckled, 8/40 is clean.
-  if (behind) Object.assign(lm, { polygonOffset: true, polygonOffsetFactor: 8, polygonOffsetUnits: 40 });
   lineMaterials.push(lm);
   const line = new Line2(geom, lm);
   line.computeLineDistances();
   line.renderOrder = order;
   return line;
+}
+
+// The outline is the same polyline as the line it outlines, so the two z-fight and the line breaks
+// into dashes. polygonOffset only papers over it — the depth error grows as you zoom in and the
+// dashes come back. Instead the whole outline group is scaled about the camera: every point moves
+// straight away from the eye, which leaves the screen position untouched but puts real distance
+// between the two strokes. The step is capped so the outline never sinks into the rock the kernel
+// lifted the line off.
+const outlineGroup = new THREE.Group();
+let outlineMaxStep = 0;
+
+function pushOutlineBack() {
+  const d = camera.position.distanceTo(controls.target);
+  const eps = Math.min(0.002, outlineMaxStep / Math.max(d, 1e-6));
+  outlineGroup.scale.setScalar(1 + eps);
+  outlineGroup.position.copy(camera.position).multiplyScalar(-eps);
 }
 
 const routeLabels = [];
@@ -220,16 +231,21 @@ function smooth(pts, passes) {
 
 function buildRoutes(meta, sceneSize) {
   const anchors = [];
+  routeGroup.add(outlineGroup);
+  outlineMaxStep = sceneSize * 0.002;   // half the clearance the kernel lifted the line by
   for (const r of meta.routes) {
     // the points already carry their clearance above the rock — the kernel lifts them along the
     // surface normal and verifies each one against the mesh, so nothing is offset here
     const raw = r.points.map(p => new THREE.Vector3(...p));
     const pts = smooth(raw, 2);
-    routeLabels.push({ name: r.name, grade: r.grade || '–', pts,
+    // the world is y-down, so the largest y is the foot of the route: the label hangs there and
+    // stays there, rather than sliding along the line as the view changes
+    const foot = pts.reduce((a, b) => (b.y > a.y ? b : a));
+    routeLabels.push({ name: r.name, grade: r.grade || '–', foot, osmId: r.osmId,
                        colour: '#' + gradeColor(r.grade, r.gradeSystem).toString(16).padStart(6, '0') });
     // LineBasicMaterial ignores linewidth on almost every platform, so use the fat-line addon
     const colour = gradeColor(r.grade, r.gradeSystem);
-    routeGroup.add(fatLine(pts, contrastColor(colour), 4.5, 1, true));
+    outlineGroup.add(fatLine(pts, contrastColor(colour), 4.5, 1));
     routeGroup.add(fatLine(pts, colour, 3, 2));
     // node indices address the points as they came from the kernel, not the resampled curve
     const nodes = r.nodes || (r.types || []).map((t, i) => ({ index: i, type: t }));
@@ -279,27 +295,15 @@ function drawLabels() {
   const v = new THREE.Vector3();
   const cand = [];
   for (const r of routeLabels) {
-    // hang the label off the lowest point of the route that is actually on screen, so it never
-    // covers the line and does not vanish when you zoom into the middle of a route
-    let best = null;
-    for (const e of r.pts) {
-      v.copy(e).project(camera);
-      if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
-      const p = { x: (v.x * 0.5 + 0.5) * innerWidth, y: (0.5 - v.y * 0.5) * innerHeight, z: v.z };
-      if (!best || p.y > best.y) best = p;
-    }
-    if (!best) continue;
-    cand.push({ r, ...best });
+    v.copy(r.foot).project(camera);
+    if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+    cand.push({ r, x: (v.x * 0.5 + 0.5) * innerWidth, y: (0.5 - v.y * 0.5) * innerHeight, z: v.z });
   }
   cand.sort((a, b) => a.z - b.z);          // nearest routes get first claim on the space
 
   const box = (c, text) => {
     const w = lg.measureText(text).width + PAD * 2, h = FONT + PAD * 2 - 2;
-    // zoomed in, the bottom of a route is usually off the bottom of the window - keep the label
-    // in view rather than letting it follow the line off screen
-    return { w, h, text,
-             x: Math.min(Math.max(c.x - w / 2, 4), innerWidth - w - 4),
-             y: Math.min(c.y + OFFSET, innerHeight - h - 4) };
+    return { w, h, text, x: c.x - w / 2, y: c.y + OFFSET };
   };
   const placed = [];
   for (const c of cand) {
@@ -312,6 +316,7 @@ function drawLabels() {
     const wide = box(b.c, `${b.c.r.name}  ${b.c.r.grade}`);
     if (!placed.some(p => p !== b && overlaps(wide, p))) Object.assign(b, wide);
   }
+  hitBoxes = placed;
 
   for (const b of placed) {
     lg.fillStyle = 'rgba(12,15,20,0.82)';
@@ -326,6 +331,28 @@ function drawLabels() {
     lg.fillText(b.text, b.x + PAD, b.y + b.h / 2 + 0.5);
   }
 }
+
+// A label opens the route on openclimbing. The overlay canvas stays pointer-transparent so it
+// never steals a drag from the controls; instead the click is hit-tested against the boxes drawn
+// last frame, and only counts if the pointer barely moved — otherwise every orbit ending on a
+// label would navigate away.
+let hitBoxes = [];
+const labelAt = e => (namesBox.checked && routeGroup.visible)
+  ? hitBoxes.find(b => e.clientX >= b.x && e.clientX <= b.x + b.w &&
+                       e.clientY >= b.y && e.clientY <= b.y + b.h)
+  : undefined;
+let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('pointerup', e => {
+  const moved = down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4;
+  down = null;
+  if (moved || e.button !== 0) return;
+  const b = labelAt(e);
+  if (b && b.c.r.osmId) open(`https://openclimbing.org/node/${b.c.r.osmId}`, '_blank', 'noopener');
+});
+renderer.domElement.addEventListener('pointermove', e => {
+  renderer.domElement.style.cursor = labelAt(e) ? 'pointer' : '';
+});
 
 // ---- bolt overlay ---------------------------------------------------------
 const boltGroup = new THREE.Group();
@@ -504,6 +531,7 @@ new GLTFLoader().load(FILE,
 
 renderer.setAnimationLoop(() => {
   controls.update();
+  pushOutlineBack();
   renderer.render(scene, camera);
   drawLabels();
 });
