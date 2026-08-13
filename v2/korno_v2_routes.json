@@ -1,0 +1,775 @@
+{
+ "crag": "Korno",
+ "source": "openclimbing.org export -> OSM wikimedia_commons:path",
+ "note": "positions are in the same coordinate frame as korno_v2.glb",
+ "matches": {
+  "File:Tomáškův lom - Korno.jpg": {
+   "drone": "DJI_20260811211418_0016_D.JPG",
+   "inliers": 4000,
+   "runner_up": 1861
+  }
+ },
+ "count": 13,
+ "routes": [
+  {
+   "name": "Emicka",
+   "grade": "6-",
+   "osmId": 14086964107,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125610/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     3.4612,
+     1.4049,
+     2.3678
+    ],
+    [
+     3.5087,
+     1.0097,
+     2.4227
+    ],
+    [
+     3.4711,
+     0.5194,
+     2.4253
+    ],
+    [
+     3.3965,
+     -1.5284,
+     2.5192
+    ]
+   ],
+   "points_2d": [
+    [
+     0.672,
+     0.738
+    ],
+    [
+     0.683,
+     0.658
+    ],
+    [
+     0.685,
+     0.558
+    ],
+    [
+     0.705,
+     0.113
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Hodna Ivetka",
+   "grade": "6-",
+   "osmId": 14086964108,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125609/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     2.8745,
+     1.8526,
+     1.9674
+    ],
+    [
+     2.935,
+     -1.5361,
+     2.3927
+    ]
+   ],
+   "points_2d": [
+    [
+     0.593,
+     0.837
+    ],
+    [
+     0.646,
+     0.104
+    ]
+   ],
+   "types": [
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Kapitan Miso",
+   "grade": null,
+   "osmId": 14087592034,
+   "url": null,
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     -2.3449,
+     1.7514,
+     2.3917
+    ],
+    [
+     -2.2921,
+     0.0684,
+     2.5851
+    ],
+    [
+     -2.2044,
+     -1.6603,
+     2.4166
+    ]
+   ],
+   "points_2d": [
+    [
+     0.103,
+     0.641
+    ],
+    [
+     0.116,
+     0.353
+    ],
+    [
+     0.105,
+     0.035
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Krasovina",
+   "grade": "6-",
+   "osmId": 14086964105,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125612/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     4.1354,
+     1.4112,
+     2.6523
+    ],
+    [
+     4.2394,
+     0.9864,
+     2.6583
+    ],
+    [
+     4.2103,
+     0.0894,
+     2.6404
+    ],
+    [
+     4.1808,
+     -0.4539,
+     2.5922
+    ],
+    [
+     4.1939,
+     -1.1152,
+     2.6949
+    ],
+    [
+     4.1357,
+     -1.7631,
+     2.705
+    ]
+   ],
+   "points_2d": [
+    [
+     0.752,
+     0.741
+    ],
+    [
+     0.771,
+     0.661
+    ],
+    [
+     0.782,
+     0.479
+    ],
+    [
+     0.788,
+     0.364
+    ],
+    [
+     0.8,
+     0.218
+    ],
+    [
+     0.804,
+     0.07
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Pohodinda",
+   "grade": "5+",
+   "osmId": 14086964113,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125619/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     0.364,
+     2.2191,
+     2.0927
+    ],
+    [
+     0.3281,
+     1.3281,
+     2.2576
+    ],
+    [
+     0.416,
+     0.9012,
+     2.3234
+    ],
+    [
+     0.4925,
+     0.4181,
+     2.2993
+    ]
+   ],
+   "points_2d": [
+    [
+     0.326,
+     0.811
+    ],
+    [
+     0.333,
+     0.64
+    ],
+    [
+     0.346,
+     0.561
+    ],
+    [
+     0.354,
+     0.473
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Pohopinda",
+   "grade": "5+",
+   "osmId": 14086964112,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125620/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     0.873,
+     2.2284,
+     2.156
+    ],
+    [
+     0.8602,
+     1.5187,
+     2.1883
+    ],
+    [
+     0.8113,
+     1.1072,
+     2.1722
+    ],
+    [
+     0.7242,
+     0.7665,
+     2.2516
+    ],
+    [
+     0.4925,
+     0.4181,
+     2.2993
+    ]
+   ],
+   "points_2d": [
+    [
+     0.379,
+     0.824
+    ],
+    [
+     0.382,
+     0.693
+    ],
+    [
+     0.378,
+     0.616
+    ],
+    [
+     0.374,
+     0.546
+    ],
+    [
+     0.354,
+     0.473
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Rohaci",
+   "grade": "6",
+   "osmId": 14086964114,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125618/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     -0.4913,
+     2.1315,
+     2.0758
+    ],
+    [
+     -0.5372,
+     1.2768,
+     2.2607
+    ],
+    [
+     -0.52,
+     0.8363,
+     2.2124
+    ],
+    [
+     -0.5786,
+     0.364,
+     2.186
+    ],
+    [
+     -0.72,
+     -0.0953,
+     2.1946
+    ]
+   ],
+   "points_2d": [
+    [
+     0.244,
+     0.771
+    ],
+    [
+     0.251,
+     0.609
+    ],
+    [
+     0.25,
+     0.532
+    ],
+    [
+     0.243,
+     0.444
+    ],
+    [
+     0.23,
+     0.354
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Ropucha",
+   "grade": "6-",
+   "osmId": 14086964110,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125607/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     1.7977,
+     1.9158,
+     2.1551
+    ],
+    [
+     1.8203,
+     -1.1062,
+     2.5314
+    ]
+   ],
+   "points_2d": [
+    [
+     0.476,
+     0.797
+    ],
+    [
+     0.512,
+     0.188
+    ]
+   ],
+   "types": [
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Rytir Ferda",
+   "grade": "6+",
+   "osmId": 14086964106,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125611/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     3.9163,
+     1.4952,
+     2.5826
+    ],
+    [
+     3.9374,
+     0.5325,
+     2.6866
+    ],
+    [
+     3.9035,
+     0.0815,
+     2.6187
+    ],
+    [
+     3.8775,
+     -0.2953,
+     2.5498
+    ],
+    [
+     3.7938,
+     -0.8622,
+     2.6156
+    ],
+    [
+     3.7825,
+     -1.7809,
+     2.7018
+    ]
+   ],
+   "points_2d": [
+    [
+     0.725,
+     0.755
+    ],
+    [
+     0.741,
+     0.561
+    ],
+    [
+     0.744,
+     0.471
+    ],
+    [
+     0.747,
+     0.393
+    ],
+    [
+     0.745,
+     0.268
+    ],
+    [
+     0.758,
+     0.063
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Samovycep",
+   "grade": "6-",
+   "osmId": 14086964115,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125605/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     -1.6383,
+     1.7525,
+     2.2297
+    ],
+    [
+     -0.9925,
+     -1.6708,
+     2.2779
+    ]
+   ],
+   "points_2d": [
+    [
+     0.151,
+     0.666
+    ],
+    [
+     0.208,
+     0.038
+    ]
+   ],
+   "types": [
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Slibotechna",
+   "grade": "6",
+   "osmId": 14086964109,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125608/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     2.3905,
+     2.1328,
+     1.9985
+    ],
+    [
+     2.2783,
+     -1.1286,
+     2.4218
+    ]
+   ],
+   "points_2d": [
+    [
+     0.535,
+     0.871
+    ],
+    [
+     0.562,
+     0.188
+    ]
+   ],
+   "types": [
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "Stridava pece",
+   "grade": "5+",
+   "osmId": 14086964111,
+   "url": "https://www.horosvaz.cz/skaly-cesta-125606/",
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     1.3508,
+     2.1369,
+     2.003
+    ],
+    [
+     1.2996,
+     0.7045,
+     2.2
+    ],
+    [
+     1.3341,
+     0.3077,
+     2.2544
+    ],
+    [
+     1.3446,
+     -0.2051,
+     2.3314
+    ],
+    [
+     1.441,
+     -1.1187,
+     2.5553
+    ]
+   ],
+   "points_2d": [
+    [
+     0.422,
+     0.835
+    ],
+    [
+     0.432,
+     0.55
+    ],
+    [
+     0.44,
+     0.471
+    ],
+    [
+     0.447,
+     0.367
+    ],
+    [
+     0.471,
+     0.181
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  },
+  {
+   "name": "projekt",
+   "grade": null,
+   "osmId": 14087624843,
+   "url": null,
+   "photo": "File:Tomáškův lom - Korno.jpg",
+   "drone_photo": "DJI_20260811211418_0016_D.JPG",
+   "points": [
+    [
+     4.5306,
+     1.341,
+     2.7401
+    ],
+    [
+     4.5332,
+     0.9668,
+     2.7734
+    ],
+    [
+     4.8047,
+     -1.7465,
+     2.5791
+    ]
+   ],
+   "points_2d": [
+    [
+     0.8,
+     0.734
+    ],
+    [
+     0.806,
+     0.659
+    ],
+    [
+     0.899,
+     0.076
+    ]
+   ],
+   "types": [
+    null,
+    null,
+    "anchor"
+   ],
+   "dotted_after": [
+    false,
+    false,
+    false
+   ],
+   "dropped": 0
+  }
+ ]
+}

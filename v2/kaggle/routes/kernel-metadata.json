@@ -1,0 +1,21 @@
+{
+  "id": "pavelzbytovsk/korno-routes-3d",
+  "title": "korno-routes-3d",
+  "code_file": "korno-routes-3d.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "pavelzbytovsk/korno-rockface-photogrammetry"
+  ],
+  "kernel_sources": [
+    "pavelzbytovsk/korno-v2-mvs"
+  ],
+  "competition_sources": [],
+  "model_sources": [],
+  "machine_shape": "None"
+}

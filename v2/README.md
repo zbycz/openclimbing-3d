@@ -114,3 +114,29 @@ the 19 that survived agree to within 0.001–0.028 units across up to 7 views.
 That the survivors form two parallel vertical lines with plausible clip spacing — while the rejects are
 scattered uniformly over the wall — is a good sign the geometry is right, and it is not something a
 per-photo confidence threshold could have discovered.
+
+
+## Climbing routes (metadata only)
+
+openclimbing.org stores each route as a polyline drawn **on a photo** — `wikimedia_commons` names the
+Commons image, `wikimedia_commons:path` holds the points as normalised `x,y|x,y|…`. The crag "Korno"
+(OSM relation 17486978) has 58 routes over 5 photos.
+
+The bridge is that the crag's first Commons photo is **the same shot as one of the drone photos**:
+`Tomáškův lom - Korno.jpg` = `DJI_20260811211418_0016_D.JPG`, established by SIFT + RANSAC with
+**4000 inliers** — the SIFT feature cap, so effectively every feature matched, against 1861 for the next
+best (a neighbouring frame with genuine overlap). The other four photos are phone shots from the ground
+and correctly matched nothing (9 inliers, well under the threshold of 40).
+
+Keypoints are normalised to `[0,1]` before the homography is fitted, so it maps *fractions of one image to
+fractions of the other* — resolution drops out, and the route paths (also normalised) map straight through
+it. From there it is the same ray-cast as the bolts.
+
+| | |
+|---|---|
+| `korno_v2_routes.json` | 13 routes as 3D polylines, with names, grades and point types |
+| `routes_preview.jpg` | the matched drone photo with the paths drawn on it, for checking |
+
+The path format is decoded per openclimbing's own `pathUtils.ts`: a trailing letter on the `y` value is the
+point type (`A` anchor, `B` bolt, `P` piton, `S` sling, `U` unfinished) and a trailing colon means the line
+to the next point is dotted. Reading those as plain numbers fails — 13 of the points here end in `A`.

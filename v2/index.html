@@ -42,6 +42,7 @@
 <div id="hud">
   <h1>Korno rockface</h1>
   <p id="sub">dense photogrammetry</p>
+  <label><input type="checkbox" id="routes"> show climbing routes</label>
   <label><input type="checkbox" id="bolts"> show bolts</label>
   <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
@@ -113,6 +114,65 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// ---- route overlay --------------------------------------------------------
+const routeGroup = new THREE.Group();
+routeGroup.visible = false;
+scene.add(routeGroup);
+const routeToggle = document.getElementById('routes');
+routeToggle.addEventListener('change', e => { routeGroup.visible = e.target.checked; });
+
+function labelSprite(text, sceneSize) {
+  const pad = 10, font = 44;
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d');
+  g.font = `600 ${font}px system-ui, sans-serif`;
+  c.width = g.measureText(text).width + pad * 2;
+  c.height = font + pad * 2;
+  const g2 = c.getContext('2d');
+  g2.font = `600 ${font}px system-ui, sans-serif`;
+  g2.fillStyle = 'rgba(12,15,20,0.78)';
+  g2.roundRect(0, 0, c.width, c.height, 12); g2.fill();
+  g2.fillStyle = '#ffd479';
+  g2.textBaseline = 'middle';
+  g2.fillText(text, pad, c.height / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  const h = sceneSize * 0.012;
+  sp.scale.set(h * c.width / c.height, h, 1);
+  sp.renderOrder = 3;
+  return sp;
+}
+
+const routeLabels = [];
+
+function buildRoutes(meta, viewDir, sceneSize) {
+  // the points sit exactly on the mesh, so lift them towards the cameras to avoid z-fighting
+  const lift = new THREE.Vector3().fromArray(viewDir || [0, 0, 1])
+    .normalize().multiplyScalar(-sceneSize * 0.004);
+  const anchors = [];
+  for (const r of meta.routes) {
+    const pts = r.points.map(p => new THREE.Vector3(...p).add(lift));
+    const geom = new THREE.BufferGeometry().setFromPoints(pts);
+    routeGroup.add(new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xff8c1a })));
+    (r.types || []).forEach((t, i) => { if (t === 'anchor' && pts[i]) anchors.push(pts[i]); });
+    const label = labelSprite(`${r.name}${r.grade ? '  ' + r.grade : ''}`, sceneSize);
+    label.position.copy(pts[0]);
+    routeLabels.push(label);
+    routeGroup.add(label);
+  }
+  if (anchors.length) {
+    const g = new THREE.SphereGeometry(sceneSize * 0.0035, 12, 8);
+    const m = new THREE.MeshBasicMaterial({ color: 0x69d17c });
+    const inst = new THREE.InstancedMesh(g, m, anchors.length);
+    const mat4 = new THREE.Matrix4();
+    anchors.forEach((p, i) => inst.setMatrixAt(i, mat4.makeTranslation(p.x, p.y, p.z)));
+    inst.instanceMatrix.needsUpdate = true;
+    routeGroup.add(inst);
+  }
+  routeToggle.parentElement.lastChild.textContent = ` show climbing routes (${meta.routes.length})`;
+}
 
 // ---- bolt overlay ---------------------------------------------------------
 const boltGroup = new THREE.Group();
@@ -214,6 +274,9 @@ const boltPromise = fetch('korno_v2_bolts.json')
 const rejectedPromise = fetch('korno_v2_bolts_rejected.json')
   .then(r => (r.ok ? r.json() : null))
   .catch(() => null);
+const routePromise = fetch('korno_v2_routes.json')
+  .then(r => (r.ok ? r.json() : null))
+  .catch(() => null);
 
 new GLTFLoader().load(FILE,
   async gltf => {
@@ -238,6 +301,7 @@ new GLTFLoader().load(FILE,
     camera.position.set(centre.x, centre.y, centre.z - dist);
     controls.target.copy(centre);
     controls.maxDistance = dist * 5;
+    labelCutoff = dist * 0.55;
     controls.update();
 
     let tris = 0;
@@ -255,9 +319,17 @@ new GLTFLoader().load(FILE,
       document.getElementById('unconfirmedRow').style.display = 'none';
     }
 
+    const routeMeta = await routePromise;
+    if (routeMeta && routeMeta.routes.length) {
+      buildRoutes(routeMeta, meta && meta.viewDir, Math.max(size.x, size.y));
+    } else {
+      routeToggle.closest('label').style.display = 'none';
+    }
+
     document.getElementById('sub').textContent =
       `${(tris / 1e6).toFixed(2)}M triangles${meta ? ` · ${meta.cameras.length} photos` : ''}` +
-      `${boltMeta ? ` · ${boltMeta.count} bolts` : ''}`;
+      `${boltMeta ? ` · ${boltMeta.count} bolts` : ''}` +
+      `${routeMeta ? ` · ${routeMeta.count} routes` : ''}`;
     statusEl.classList.add('hidden');
   },
   ev => {
@@ -275,7 +347,17 @@ new GLTFLoader().load(FILE,
     msgEl.textContent = 'Could not load ' + FILE;
   });
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+// 13 routes start within a few metres of each other, so their labels are unreadable from far
+// away - show them only once zoomed in past half the framing distance
+let labelCutoff = Infinity;
+renderer.setAnimationLoop(() => {
+  controls.update();
+  if (routeLabels.length) {
+    const show = camera.position.distanceTo(controls.target) < labelCutoff;
+    for (const l of routeLabels) l.visible = show;
+  }
+  renderer.render(scene, camera);
+});
 </script>
 </body>
 </html>
