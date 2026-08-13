@@ -55,7 +55,9 @@ CFG = dict(
 
     DENSIFY_STEP  = 0.0025, # sample the path this often (fraction of the photo) before ray-casting
     LIFT_FRAC     = 0.005,  # clearance above the rock, as a fraction of the scene size
-    SIMPLIFY_FRAC = 0.4,    # drop resampled points whose chord error stays under this * lift
+    SIMPLIFY_FRAC = 0.15,   # drop resampled points whose chord error stays under this * lift.
+                            # kept small on purpose: a sparse polyline reads as a chain of straight
+                            # segments with the outline showing at every joint, not as one line
 )
 os.makedirs(CFG["WORK"], exist_ok=True)
 os.makedirs(CFG["OUT"], exist_ok=True)
