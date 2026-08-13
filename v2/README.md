@@ -154,4 +154,13 @@ chord across a bulge runs inside the wall. The fix is three steps:
    points, and because the tolerance is below the clearance, the remaining chords cannot eat through it.
 
 Colours come from openclimbing's own palette (`gradeData.ts`, dark mode): teal to red as the grade rises,
-`#555` for a route with no grade.
+`#555` for a route with no grade, each stroke outlined in its contrasting colour the way
+`PathWithBorder.tsx` does — without that the ungraded grey vanishes against grey rock. The outline needs a
+generous `polygonOffset`: it is the same polyline as the line it outlines, and at this scene's near/far
+ratio the default depth precision leaves it z-fighting, which chops the line into dashes.
+
+Labels are laid out on a 2D overlay instead of as sprites, so they can be measured against each other. The
+routes start within a few metres of one another, so a label is drawn only where its box is clear of the
+ones already placed — zooming in spreads the starts apart and the rest appear one by one. A second pass
+widens a label to include the route's name wherever that still fits, which in practice means zoomed in
+close.

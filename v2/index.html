@@ -9,6 +9,7 @@
   html, body { margin: 0; height: 100%; background: #0b0d10; color: #e8eaed; overflow: hidden;
                font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   #stage { position: fixed; inset: 0; }
+  #labels { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
   #hud { position: fixed; left: 12px; top: 12px; z-index: 10; max-width: min(340px, calc(100vw - 24px));
          background: rgba(12, 15, 20, .72); backdrop-filter: blur(8px);
          border: 1px solid rgba(255, 255, 255, .1); border-radius: 10px; padding: 12px 14px; }
@@ -46,6 +47,7 @@
 </head>
 <body>
 <div id="stage"></div>
+<canvas id="labels"></canvas>
 
 <div id="hud">
   <div id="hudhead">
@@ -55,7 +57,7 @@
   <div id="hudbody">
   <p id="sub">dense photogrammetry</p>
   <label><input type="checkbox" id="routes"> show climbing routes</label>
-  <label id="routeNamesRow"><input type="checkbox" id="routeNames" checked> &nbsp;route names</label>
+  <label id="routeNamesRow"><input type="checkbox" id="routeNames" checked> &nbsp;grades</label>
   <label><input type="checkbox" id="bolts"> show bolts</label>
   <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
@@ -148,6 +150,7 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   for (const m of lineMaterials) m.resolution.set(innerWidth, innerHeight);
+  sizeLabels();
 });
 
 // ---- route overlay --------------------------------------------------------
@@ -156,29 +159,6 @@ routeGroup.visible = false;
 scene.add(routeGroup);
 const routeToggle = document.getElementById('routes');
 routeToggle.addEventListener('change', e => { routeGroup.visible = e.target.checked; });
-
-function labelSprite(text, sceneSize) {
-  const pad = 10, font = 44;
-  const c = document.createElement('canvas');
-  const g = c.getContext('2d');
-  g.font = `600 ${font}px system-ui, sans-serif`;
-  c.width = g.measureText(text).width + pad * 2;
-  c.height = font + pad * 2;
-  const g2 = c.getContext('2d');
-  g2.font = `600 ${font}px system-ui, sans-serif`;
-  g2.fillStyle = 'rgba(12,15,20,0.78)';
-  g2.roundRect(0, 0, c.width, c.height, 12); g2.fill();
-  g2.fillStyle = '#ffd479';
-  g2.textBaseline = 'middle';
-  g2.fillText(text, pad, c.height / 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  const h = sceneSize * 0.012;
-  sp.scale.set(h * c.width / c.height, h, 1);
-  sp.renderOrder = 3;
-  return sp;
-}
 
 // openclimbing's own ramp, from src/services/tagging/climbing/gradeData.ts (dark mode).
 // Keyed on UIAA; the ramp is flat within a tier, so only the tier boundaries are listed.
@@ -208,9 +188,10 @@ function fatLine(pts, colour, width, order, behind) {
   geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
   const lm = new LineMaterial({ color: colour, linewidth: width });
   lm.resolution.set(innerWidth, innerHeight);
-  // the two strokes are the same polyline, so nudge the outline back in depth - otherwise it
-  // z-fights with the line it is outlining and speckles through it
-  if (behind) Object.assign(lm, { polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 4 });
+  // Both strokes are the same polyline, so the outline z-fights with the line it is outlining and
+  // breaks it into dashes. The camera's near/far span leaves little depth precision out here, so the
+  // offset has to be generous - 2/4 still speckled, 8/40 is clean.
+  if (behind) Object.assign(lm, { polygonOffset: true, polygonOffsetFactor: 8, polygonOffsetUnits: 40 });
   lineMaterials.push(lm);
   const line = new Line2(geom, lm);
   line.computeLineDistances();
@@ -222,22 +203,37 @@ const routeLabels = [];
 const lineMaterials = [];
 const namesBox = document.getElementById('routeNames');
 
+// The points trace the rock closely enough to pick up its noise, which reads as a zigzag. Two
+// binomial passes take that out; each moves a point by a fraction of the local wobble — centimetres
+// against the ~30 cm the kernel lifted the line by, so it cannot push it back into the wall.
+function smooth(pts, passes) {
+  let p = pts.map(v => v.clone());
+  for (let k = 0; k < passes; k++) {
+    const q = p.map(v => v.clone());
+    for (let i = 1; i < p.length - 1; i++) {
+      q[i].copy(p[i - 1]).addScaledVector(p[i], 2).add(p[i + 1]).multiplyScalar(0.25);
+    }
+    p = q;
+  }
+  return p.length > 2 ? new THREE.CatmullRomCurve3(p, false, 'centripetal').getPoints(p.length * 3) : p;
+}
+
 function buildRoutes(meta, sceneSize) {
   const anchors = [];
   for (const r of meta.routes) {
     // the points already carry their clearance above the rock — the kernel lifts them along the
     // surface normal and verifies each one against the mesh, so nothing is offset here
-    const pts = r.points.map(p => new THREE.Vector3(...p));
+    const raw = r.points.map(p => new THREE.Vector3(...p));
+    const pts = smooth(raw, 2);
+    routeLabels.push({ name: r.name, grade: r.grade || '–', pts,
+                       colour: '#' + gradeColor(r.grade, r.gradeSystem).toString(16).padStart(6, '0') });
     // LineBasicMaterial ignores linewidth on almost every platform, so use the fat-line addon
     const colour = gradeColor(r.grade, r.gradeSystem);
     routeGroup.add(fatLine(pts, contrastColor(colour), 4.5, 1, true));
     routeGroup.add(fatLine(pts, colour, 3, 2));
+    // node indices address the points as they came from the kernel, not the resampled curve
     const nodes = r.nodes || (r.types || []).map((t, i) => ({ index: i, type: t }));
-    for (const n of nodes) if (n.type === 'anchor' && pts[n.index]) anchors.push(pts[n.index]);
-    const label = labelSprite(`${r.name}${r.grade ? '  ' + r.grade : ''}`, sceneSize);
-    label.position.copy(pts[0]);
-    routeLabels.push(label);
-    routeGroup.add(label);
+    for (const n of nodes) if (n.type === 'anchor' && raw[n.index]) anchors.push(raw[n.index]);
   }
   if (anchors.length) {
     const g = new THREE.SphereGeometry(sceneSize * 0.0022, 12, 8);
@@ -249,6 +245,86 @@ function buildRoutes(meta, sceneSize) {
     routeGroup.add(inst);
   }
   routeToggle.parentElement.lastChild.textContent = ` show climbing routes (${meta.routes.length})`;
+}
+
+// ---- route labels ---------------------------------------------------------
+// Drawn on a 2D overlay rather than as sprites, so they can be laid out against each other:
+// the routes start within a few metres of one another, and 13 sprites at that spacing are an
+// unreadable pile. A label is drawn only if its box is clear of the ones already placed, so
+// zooming in — which spreads the starts apart on screen — reveals the rest one by one. The
+// name is a second pass over the same boxes: it only appears where it fits without pushing
+// anything else out, which in practice means zoomed right in on a single route.
+const labelCanvas = document.getElementById('labels');
+const lg = labelCanvas.getContext('2d');
+const FONT = 13, PAD = 6, GAP = 4, OFFSET = 12;
+
+function sizeLabels() {
+  const dpr = Math.min(devicePixelRatio, 2);
+  labelCanvas.width = innerWidth * dpr;
+  labelCanvas.height = innerHeight * dpr;
+  labelCanvas.style.width = innerWidth + 'px';
+  labelCanvas.style.height = innerHeight + 'px';
+  lg.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeLabels();
+
+const overlaps = (a, b) => a.x < b.x + b.w + GAP && a.x + a.w + GAP > b.x &&
+                           a.y < b.y + b.h + GAP && a.y + a.h + GAP > b.y;
+
+function drawLabels() {
+  lg.clearRect(0, 0, innerWidth, innerHeight);
+  if (!routeGroup.visible || !namesBox.checked || !routeLabels.length) return;
+  lg.font = `600 ${FONT}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+
+  const v = new THREE.Vector3();
+  const cand = [];
+  for (const r of routeLabels) {
+    // hang the label off the lowest point of the route that is actually on screen, so it never
+    // covers the line and does not vanish when you zoom into the middle of a route
+    let best = null;
+    for (const e of r.pts) {
+      v.copy(e).project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+      const p = { x: (v.x * 0.5 + 0.5) * innerWidth, y: (0.5 - v.y * 0.5) * innerHeight, z: v.z };
+      if (!best || p.y > best.y) best = p;
+    }
+    if (!best) continue;
+    cand.push({ r, ...best });
+  }
+  cand.sort((a, b) => a.z - b.z);          // nearest routes get first claim on the space
+
+  const box = (c, text) => {
+    const w = lg.measureText(text).width + PAD * 2, h = FONT + PAD * 2 - 2;
+    // zoomed in, the bottom of a route is usually off the bottom of the window - keep the label
+    // in view rather than letting it follow the line off screen
+    return { w, h, text,
+             x: Math.min(Math.max(c.x - w / 2, 4), innerWidth - w - 4),
+             y: Math.min(c.y + OFFSET, innerHeight - h - 4) };
+  };
+  const placed = [];
+  for (const c of cand) {
+    const b = box(c, c.r.grade);
+    if (placed.some(p => overlaps(b, p))) continue;
+    placed.push(Object.assign(b, { colour: c.r.colour, c }));
+  }
+  for (const b of placed) {
+    if (!b.c.r.name) continue;
+    const wide = box(b.c, `${b.c.r.name}  ${b.c.r.grade}`);
+    if (!placed.some(p => p !== b && overlaps(wide, p))) Object.assign(b, wide);
+  }
+
+  for (const b of placed) {
+    lg.fillStyle = 'rgba(12,15,20,0.82)';
+    lg.strokeStyle = b.colour;
+    lg.lineWidth = 1;
+    lg.beginPath();
+    lg.roundRect(b.x, b.y, b.w, b.h, 5);
+    lg.fill();
+    lg.globalAlpha = 0.55; lg.stroke(); lg.globalAlpha = 1;
+    lg.fillStyle = b.colour;
+    lg.textBaseline = 'middle';
+    lg.fillText(b.text, b.x + PAD, b.y + b.h / 2 + 0.5);
+  }
 }
 
 // ---- bolt overlay ---------------------------------------------------------
@@ -378,7 +454,6 @@ new GLTFLoader().load(FILE,
     camera.position.set(centre.x, centre.y, centre.z - dist);
     controls.target.copy(centre);
     controls.maxDistance = dist * 5;
-    labelCutoff = dist * 0.55;
     controls.update();
 
     let tris = 0;
@@ -427,16 +502,10 @@ new GLTFLoader().load(FILE,
     msgEl.textContent = 'Could not load ' + FILE;
   });
 
-// 13 routes start within a few metres of each other, so their labels are unreadable from far
-// away - show them only once zoomed in past half the framing distance
-let labelCutoff = Infinity;
 renderer.setAnimationLoop(() => {
   controls.update();
-  if (routeLabels.length) {
-    const show = namesBox.checked && camera.position.distanceTo(controls.target) < labelCutoff;
-    for (const l of routeLabels) l.visible = show;
-  }
   renderer.render(scene, camera);
+  drawLabels();
 });
 </script>
 </body>
