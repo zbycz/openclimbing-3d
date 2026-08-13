@@ -135,8 +135,23 @@ it. From there it is the same ray-cast as the bolts.
 | | |
 |---|---|
 | `korno_v2_routes.json` | 13 routes as 3D polylines, with names, grades and point types |
-| `routes_preview.jpg` | the matched drone photo with the paths drawn on it, for checking |
+| `routes_on_<photo>.jpg` | the matched drone photo with the paths drawn on it, for checking |
 
 The path format is decoded per openclimbing's own `pathUtils.ts`: a trailing letter on the `y` value is the
 point type (`A` anchor, `B` bolt, `P` piton, `S` sling, `U` unfinished) and a trailing colon means the line
 to the next point is dotted. Reading those as plain numbers fails — 13 of the points here end in `A`.
+
+### Keeping the lines out of the rock
+
+A route is drawn with a handful of points, so casting only those and joining them gives *chords* — and a
+chord across a bulge runs inside the wall. The fix is three steps:
+
+1. **resample** the path every 0.25 % of the photo before casting, so every sample gets its own ray and the
+   polyline follows the surface instead of cutting corners;
+2. **lift** each sample along the mesh normal (oriented back towards the camera), then verify it by casting
+   from the camera again — anything still occluded gets its lift doubled, up to five times;
+3. **simplify** with Douglas–Peucker at 40 % of the lift. A straight stretch collapses back to a couple of
+   points, and because the tolerance is below the clearance, the remaining chords cannot eat through it.
+
+Colours come from openclimbing's own palette (`gradeData.ts`, dark mode): teal to red as the grade rises,
+`#555` for a route with no grade.
