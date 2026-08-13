@@ -16,6 +16,7 @@
   #hud p { margin: 0; color: #9aa3ad; font-size: 12.5px; }
   #hud label { display: block; margin-top: 9px; color: #c8cdd3; font-size: 12.5px; cursor: pointer;
                user-select: none; }
+  #hud label#unconfirmedRow { margin-top: 3px; margin-left: 16px; color: #9aa3ad; }
   #hud input { vertical-align: middle; margin-right: 6px; }
   #hint { margin-top: 9px; color: #6b7480; font-size: 12px; }
   #quality { margin-top: 6px; font-size: 12px; }
@@ -41,8 +42,11 @@
 <div id="hud">
   <h1>Korno rockface</h1>
   <p id="sub">dense photogrammetry</p>
+  <label><input type="checkbox" id="bolts"> show bolts</label>
+  <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
   <label><input type="checkbox" id="lit" checked> studio light</label>
+  <label><input type="checkbox" id="invert"> invert mouse axes</label>
   <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
   <p id="quality"></p>
 </div>
@@ -77,6 +81,15 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.01, 5
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
+const invertBox = document.getElementById('invert');
+const applyInvert = on => { controls.rotateSpeed = on ? -1 : 1; };
+invertBox.checked = localStorage.getItem('korno.invert') === '1';
+applyInvert(invertBox.checked);
+invertBox.addEventListener('change', e => {
+  applyInvert(e.target.checked);
+  localStorage.setItem('korno.invert', e.target.checked ? '1' : '0');
+});
+
 // the texture already carries the daylight it was shot in, so keep the added light gentle
 const hemi = new THREE.HemisphereLight(0xffffff, 0x40505f, 2.0);
 const dir = new THREE.DirectionalLight(0xffffff, 1.1);
@@ -100,6 +113,51 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// ---- bolt overlay ---------------------------------------------------------
+const boltGroup = new THREE.Group();
+boltGroup.visible = false;
+scene.add(boltGroup);
+const boltToggle = document.getElementById('bolts');
+boltToggle.addEventListener('change', e => { boltGroup.visible = e.target.checked; });
+
+// confirmed bolts are solid red, single-view candidates a dimmer yellow
+const unconfirmedGroup = new THREE.Group();
+unconfirmedGroup.visible = false;
+boltGroup.add(unconfirmedGroup);
+const unconfirmedToggle = document.getElementById('unconfirmed');
+unconfirmedToggle.addEventListener('change', e => { unconfirmedGroup.visible = e.target.checked; });
+
+function markers(parent, positions, sceneSize, colour, opacity) {
+  const r = sceneSize * 0.004;
+  const m = new THREE.Matrix4();
+  const core = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(r, 16, 12),
+    new THREE.MeshBasicMaterial({ color: colour, transparent: opacity < 1, opacity }),
+    positions.length);
+  const halo = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(r * 2.2, 12, 8),
+    new THREE.MeshBasicMaterial({ color: colour, transparent: true, opacity: opacity * 0.22,
+                                  depthTest: false }),
+    positions.length);
+  positions.forEach((p, i) => { m.makeTranslation(...p); core.setMatrixAt(i, m); halo.setMatrixAt(i, m); });
+  core.instanceMatrix.needsUpdate = true;
+  halo.instanceMatrix.needsUpdate = true;
+  halo.renderOrder = 2;
+  parent.add(core, halo);
+}
+
+function buildBolts(meta, rejected, sceneSize) {
+  markers(boltGroup, meta.bolts.map(b => b.position), sceneSize, 0xff5a3c, 1.0);
+  boltToggle.parentElement.lastChild.textContent = ` show bolts (${meta.bolts.length} confirmed)`;
+  if (rejected && rejected.bolts.length) {
+    markers(unconfirmedGroup, rejected.bolts.map(b => b.position), sceneSize, 0xffd479, 0.75);
+    unconfirmedToggle.parentElement.lastChild.textContent =
+      `\u00a0include unconfirmed (${rejected.bolts.length}, single view only)`;
+  } else {
+    document.getElementById('unconfirmedRow').style.display = 'none';
+  }
+}
 
 // ---- camera overlay -------------------------------------------------------
 const camGroup = new THREE.Group();
@@ -150,6 +208,12 @@ function buildCameras(meta, sceneSize) {
 const metaPromise = fetch('korno_v2_cameras.json')
   .then(r => (r.ok ? r.json() : null))
   .catch(() => null);
+const boltPromise = fetch('korno_v2_bolts.json')
+  .then(r => (r.ok ? r.json() : null))
+  .catch(() => null);
+const rejectedPromise = fetch('korno_v2_bolts_rejected.json')
+  .then(r => (r.ok ? r.json() : null))
+  .catch(() => null);
 
 new GLTFLoader().load(FILE,
   async gltf => {
@@ -183,8 +247,17 @@ new GLTFLoader().load(FILE,
     if (meta) buildCameras(meta, Math.max(size.x, size.y));
     else camToggle.closest('label').style.display = 'none';
 
+    const boltMeta = await boltPromise;
+    if (boltMeta && boltMeta.bolts.length) {
+      buildBolts(boltMeta, await rejectedPromise, Math.max(size.x, size.y));
+    } else {
+      boltToggle.closest('label').style.display = 'none';
+      document.getElementById('unconfirmedRow').style.display = 'none';
+    }
+
     document.getElementById('sub').textContent =
-      `${(tris / 1e6).toFixed(2)}M triangles${meta ? ` · ${meta.cameras.length} photos` : ''}`;
+      `${(tris / 1e6).toFixed(2)}M triangles${meta ? ` · ${meta.cameras.length} photos` : ''}` +
+      `${boltMeta ? ` · ${boltMeta.count} bolts` : ''}`;
     statusEl.classList.add('hidden');
   },
   ev => {

@@ -82,3 +82,35 @@ Feature extraction and matching are the same algorithm as v1, just on the GPU in
 |---|---|---|
 | feature extraction | 597 s | 12 s |
 | matching | 1046 s | 183 s |
+
+
+## Bolts (metadata only)
+
+The reconstructed models are **not modified**. Bolt positions live in their own JSON that the viewer
+overlays, exactly like the camera poses — `korno_v2.glb` and `korno_v2_light.glb` stay byte-identical.
+
+```
+103 photos → YOLOv8-nano ONNX (openclimbing-bolts-ai) → 152 detections
+           → ray from each camera through each detection → intersect the mesh
+           → cluster the landing points across views → 19 bolts
+```
+
+| | |
+|---|---|
+| `bolts_2d/<photo>.json` | per-photo detections, normalised boxes |
+| `korno_v2_bolts.json` | 19 bolts confirmed by ≥2 photos |
+| `korno_v2_bolts_rejected.json` | 94 single-view candidates, kept for review |
+
+Two kernels, both CPU: [`kaggle/bolts`](kaggle/bolts) (~23 min) and [`kaggle/bolts3d`](kaggle/bolts3d)
+(~4 min). Splitting them means the projection can be re-tuned without repeating the inference.
+
+**Multi-view agreement is the real filter.** The detector is out of its training domain here — it learnt
+from ground-level photos where a bolt fills 30–100 px, while these drone frames show them at 12–34 px, so
+scores are low (median 0.30) and false positives are common. Thresholding on score alone would throw away
+real bolts and keep noise. Instead every detection is kept and the question becomes geometric: do several
+independent photos put a bolt in the *same place in 3D*? 94 of 113 candidates were seen once and dropped;
+the 19 that survived agree to within 0.001–0.028 units across up to 7 views.
+
+That the survivors form two parallel vertical lines with plausible clip spacing — while the rejects are
+scattered uniformly over the wall — is a good sign the geometry is right, and it is not something a
+per-photo confidence threshold could have discovered.

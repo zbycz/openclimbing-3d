@@ -44,7 +44,8 @@ CFG = dict(
     INPUT_DIR = "/kaggle/input",
     OUT       = "/kaggle/working",
 
-    MIN_SCORE   = 0.30,   # per-detection confidence floor
+    MIN_SCORE   = 0.25,   # keep everything the detector emitted - agreement between
+                          # views filters far better than any single-photo threshold
     MAX_RAY_LEN = 40.0,   # scene units; rays that hit nothing this far are dropped
     CLUSTER_R   = 0.045,  # ~14 cm at this scene scale - bolts are never closer than that
     MIN_VIEWS   = 2,      # a bolt must be seen from at least this many photos

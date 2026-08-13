@@ -1,0 +1,1 @@
+{"image": "DJI_20260811212854_0045_D.JPG", "width": 8000, "height": 4500, "model": "openclimbing-bolts-v1", "conf_threshold": 0.25, "detections": [{"cx": 0.458254, "cy": 0.43983, "w": 0.002065, "h": 0.003829, "score": 0.3008}, {"cx": 0.341587, "cy": 0.221959, "w": 0.001667, "h": 0.003003, "score": 0.2681}]}
