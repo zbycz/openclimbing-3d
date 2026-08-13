@@ -12,11 +12,19 @@
   #hud { position: fixed; left: 12px; top: 12px; z-index: 10; max-width: min(340px, calc(100vw - 24px));
          background: rgba(12, 15, 20, .72); backdrop-filter: blur(8px);
          border: 1px solid rgba(255, 255, 255, .1); border-radius: 10px; padding: 12px 14px; }
-  #hud h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+  #hudhead { display: flex; align-items: center; gap: 10px; }
+  #hud h1 { margin: 0; font-size: 15px; font-weight: 600; flex: 1; }
+  #collapse { background: none; border: 0; color: #9aa3ad; font-size: 15px; line-height: 1;
+              cursor: pointer; padding: 2px 4px; border-radius: 5px; transition: transform .18s; }
+  #collapse:hover { color: #e8eaed; background: rgba(255,255,255,.08); }
+  #hud.collapsed #hudbody { display: none; }
+  #hud.collapsed #collapse { transform: rotate(-90deg); }
+  #hudbody > p:first-child { margin-top: 4px; }
   #hud p { margin: 0; color: #9aa3ad; font-size: 12.5px; }
   #hud label { display: block; margin-top: 9px; color: #c8cdd3; font-size: 12.5px; cursor: pointer;
                user-select: none; }
-  #hud label#unconfirmedRow { margin-top: 3px; margin-left: 16px; color: #9aa3ad; }
+  #hud label#unconfirmedRow,
+  #hud label#routeNamesRow { margin-top: 3px; margin-left: 16px; color: #9aa3ad; }
   #hud input { vertical-align: middle; margin-right: 6px; }
   #hint { margin-top: 9px; color: #6b7480; font-size: 12px; }
   #quality { margin-top: 6px; font-size: 12px; }
@@ -40,9 +48,14 @@
 <div id="stage"></div>
 
 <div id="hud">
-  <h1>Korno rockface</h1>
+  <div id="hudhead">
+    <h1>Korno rockface</h1>
+    <button id="collapse" title="collapse" aria-expanded="true">&#9662;</button>
+  </div>
+  <div id="hudbody">
   <p id="sub">dense photogrammetry</p>
   <label><input type="checkbox" id="routes"> show climbing routes</label>
+  <label id="routeNamesRow"><input type="checkbox" id="routeNames" checked> &nbsp;route names</label>
   <label><input type="checkbox" id="bolts"> show bolts</label>
   <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
@@ -50,6 +63,7 @@
   <label><input type="checkbox" id="invert"> invert mouse axes</label>
   <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom</p>
   <p id="quality"></p>
+  </div>
 </div>
 
 <div id="status"><div id="bar"><i></i></div><div id="msg">loading…</div></div>
@@ -58,13 +72,33 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 const params = new URLSearchParams(location.search);
 const FILE = params.get('f') || 'korno_v2.glb';
 const LIGHT = 'korno_v2_light.glb';
+// GitHub Pages serves these gzipped, so the browser reports decompressed bytes loaded against a
+// compressed Content-Length and the bar overshoots. These are the real, uncompressed sizes.
+const SIZES = { 'korno_v2.glb': 94374136, 'korno_v2_light.glb': 11715528 };
 document.getElementById('quality').innerHTML = FILE === LIGHT
   ? '<a href="?">full detail (90 MB)</a>'
   : `<a href="?f=${LIGHT}">lighter version (11 MB)</a>`;
+
+const hud = document.getElementById('hud');
+const collapseBtn = document.getElementById('collapse');
+const applyCollapse = on => {
+  hud.classList.toggle('collapsed', on);
+  collapseBtn.setAttribute('aria-expanded', String(!on));
+  collapseBtn.title = on ? 'expand' : 'collapse';
+};
+applyCollapse(localStorage.getItem('korno.hud') === 'collapsed');
+collapseBtn.addEventListener('click', () => {
+  const on = !hud.classList.contains('collapsed');
+  applyCollapse(on);
+  localStorage.setItem('korno.hud', on ? 'collapsed' : 'open');
+});
 
 const statusEl = document.getElementById('status');
 const msgEl = document.getElementById('msg');
@@ -113,6 +147,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  for (const m of lineMaterials) m.resolution.set(innerWidth, innerHeight);
 });
 
 // ---- route overlay --------------------------------------------------------
@@ -146,6 +181,8 @@ function labelSprite(text, sceneSize) {
 }
 
 const routeLabels = [];
+const lineMaterials = [];
+const namesBox = document.getElementById('routeNames');
 
 function buildRoutes(meta, viewDir, sceneSize) {
   // the points sit exactly on the mesh, so lift them towards the cameras to avoid z-fighting
@@ -154,8 +191,15 @@ function buildRoutes(meta, viewDir, sceneSize) {
   const anchors = [];
   for (const r of meta.routes) {
     const pts = r.points.map(p => new THREE.Vector3(...p).add(lift));
-    const geom = new THREE.BufferGeometry().setFromPoints(pts);
-    routeGroup.add(new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xff8c1a })));
+    // LineBasicMaterial ignores linewidth on almost every platform, so use the fat-line addon
+    const geom = new LineGeometry();
+    geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
+    const lm = new LineMaterial({ color: 0xff8c1a, linewidth: 3 });
+    lm.resolution.set(innerWidth, innerHeight);
+    lineMaterials.push(lm);
+    const line = new Line2(geom, lm);
+    line.computeLineDistances();
+    routeGroup.add(line);
     (r.types || []).forEach((t, i) => { if (t === 'anchor' && pts[i]) anchors.push(pts[i]); });
     const label = labelSprite(`${r.name}${r.grade ? '  ' + r.grade : ''}`, sceneSize);
     label.position.copy(pts[0]);
@@ -163,7 +207,7 @@ function buildRoutes(meta, viewDir, sceneSize) {
     routeGroup.add(label);
   }
   if (anchors.length) {
-    const g = new THREE.SphereGeometry(sceneSize * 0.0035, 12, 8);
+    const g = new THREE.SphereGeometry(sceneSize * 0.0022, 12, 8);
     const m = new THREE.MeshBasicMaterial({ color: 0x69d17c });
     const inst = new THREE.InstancedMesh(g, m, anchors.length);
     const mat4 = new THREE.Matrix4();
@@ -324,6 +368,7 @@ new GLTFLoader().load(FILE,
       buildRoutes(routeMeta, meta && meta.viewDir, Math.max(size.x, size.y));
     } else {
       routeToggle.closest('label').style.display = 'none';
+      document.getElementById('routeNamesRow').style.display = 'none';
     }
 
     document.getElementById('sub').textContent =
@@ -333,11 +378,13 @@ new GLTFLoader().load(FILE,
     statusEl.classList.add('hidden');
   },
   ev => {
-    if (ev.lengthComputable) {
-      barEl.style.width = (100 * ev.loaded / ev.total) + '%';
-      msgEl.textContent = `loading… ${(ev.loaded / 1048576).toFixed(0)} / ${(ev.total / 1048576).toFixed(0)} MB`;
+    const total = SIZES[FILE] || (ev.lengthComputable && ev.total >= ev.loaded ? ev.total : 0);
+    const mb = n => (n / 1048576).toFixed(0);
+    if (total) {
+      barEl.style.width = Math.min(100, 100 * ev.loaded / total) + '%';
+      msgEl.textContent = `loading… ${mb(ev.loaded)} / ${mb(total)} MB`;
     } else {
-      msgEl.textContent = `loading… ${(ev.loaded / 1048576).toFixed(0)} MB`;
+      msgEl.textContent = `loading… ${mb(ev.loaded)} MB`;
     }
   },
   err => {
@@ -353,7 +400,7 @@ let labelCutoff = Infinity;
 renderer.setAnimationLoop(() => {
   controls.update();
   if (routeLabels.length) {
-    const show = camera.position.distanceTo(controls.target) < labelCutoff;
+    const show = namesBox.checked && camera.position.distanceTo(controls.target) < labelCutoff;
     for (const l of routeLabels) l.visible = show;
   }
   renderer.render(scene, camera);
