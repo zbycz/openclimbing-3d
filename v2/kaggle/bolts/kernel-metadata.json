@@ -1,0 +1,19 @@
+{
+  "id": "pavelzbytovsk/korno-bolts-infer",
+  "title": "korno-bolts-infer",
+  "code_file": "korno-bolts-infer.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [
+    "pavelzbytovsk/korno-rockface-photogrammetry"
+  ],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": [],
+  "machine_shape": "None"
+}
