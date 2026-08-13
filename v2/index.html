@@ -180,27 +180,42 @@ function labelSprite(text, sceneSize) {
   return sp;
 }
 
+// openclimbing's own ramp, from src/services/tagging/climbing/gradeData.ts (dark mode).
+// Keyed on UIAA; the ramp is flat within a tier, so only the tier boundaries are listed.
+const GRADE_TIERS = [['1-', 0x10adb2], ['4-', 0x7dd100], ['6-', 0xefca00],
+                     ['8-', 0xff8f1f], ['10-', 0xc9203c]];
+const DEFAULT_ROUTE_COLOR = 0x555555;
+
+function gradeColor(grade, system) {
+  if (!grade || (system && system !== 'uiaa')) return DEFAULT_ROUTE_COLOR;
+  const n = parseInt(grade.replace('~', ''), 10);
+  if (!Number.isFinite(n)) return DEFAULT_ROUTE_COLOR;
+  let c = DEFAULT_ROUTE_COLOR;
+  for (const [tier, colour] of GRADE_TIERS) if (n >= parseInt(tier, 10)) c = colour;
+  return c;
+}
+
 const routeLabels = [];
 const lineMaterials = [];
 const namesBox = document.getElementById('routeNames');
 
-function buildRoutes(meta, viewDir, sceneSize) {
-  // the points sit exactly on the mesh, so lift them towards the cameras to avoid z-fighting
-  const lift = new THREE.Vector3().fromArray(viewDir || [0, 0, 1])
-    .normalize().multiplyScalar(-sceneSize * 0.004);
+function buildRoutes(meta, sceneSize) {
   const anchors = [];
   for (const r of meta.routes) {
-    const pts = r.points.map(p => new THREE.Vector3(...p).add(lift));
+    // the points already carry their clearance above the rock — the kernel lifts them along the
+    // surface normal and verifies each one against the mesh, so nothing is offset here
+    const pts = r.points.map(p => new THREE.Vector3(...p));
     // LineBasicMaterial ignores linewidth on almost every platform, so use the fat-line addon
     const geom = new LineGeometry();
     geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
-    const lm = new LineMaterial({ color: 0xff8c1a, linewidth: 3 });
+    const lm = new LineMaterial({ color: gradeColor(r.grade, r.gradeSystem), linewidth: 3 });
     lm.resolution.set(innerWidth, innerHeight);
     lineMaterials.push(lm);
     const line = new Line2(geom, lm);
     line.computeLineDistances();
     routeGroup.add(line);
-    (r.types || []).forEach((t, i) => { if (t === 'anchor' && pts[i]) anchors.push(pts[i]); });
+    const nodes = r.nodes || (r.types || []).map((t, i) => ({ index: i, type: t }));
+    for (const n of nodes) if (n.type === 'anchor' && pts[n.index]) anchors.push(pts[n.index]);
     const label = labelSprite(`${r.name}${r.grade ? '  ' + r.grade : ''}`, sceneSize);
     label.position.copy(pts[0]);
     routeLabels.push(label);
@@ -365,7 +380,7 @@ new GLTFLoader().load(FILE,
 
     const routeMeta = await routePromise;
     if (routeMeta && routeMeta.routes.length) {
-      buildRoutes(routeMeta, meta && meta.viewDir, Math.max(size.x, size.y));
+      buildRoutes(routeMeta, Math.max(size.x, size.y));
     } else {
       routeToggle.closest('label').style.display = 'none';
       document.getElementById('routeNamesRow').style.display = 'none';
