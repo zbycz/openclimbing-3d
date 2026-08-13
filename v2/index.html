@@ -195,6 +195,29 @@ function gradeColor(grade, system) {
   return c;
 }
 
+// openclimbing draws each path twice: a wider stroke in the contrasting colour, then the grade
+// colour on top of it. Without that outline the ungraded grey is invisible against grey rock.
+function contrastColor(hex) {
+  const lum = ch => { const v = ch / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+  const L = 0.2126 * lum(hex >> 16 & 255) + 0.7152 * lum(hex >> 8 & 255) + 0.0722 * lum(hex & 255);
+  return (L + 0.05) / 0.05 > 1.05 / (L + 0.05) ? 0x000000 : 0xffffff;
+}
+
+function fatLine(pts, colour, width, order, behind) {
+  const geom = new LineGeometry();
+  geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
+  const lm = new LineMaterial({ color: colour, linewidth: width });
+  lm.resolution.set(innerWidth, innerHeight);
+  // the two strokes are the same polyline, so nudge the outline back in depth - otherwise it
+  // z-fights with the line it is outlining and speckles through it
+  if (behind) Object.assign(lm, { polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 4 });
+  lineMaterials.push(lm);
+  const line = new Line2(geom, lm);
+  line.computeLineDistances();
+  line.renderOrder = order;
+  return line;
+}
+
 const routeLabels = [];
 const lineMaterials = [];
 const namesBox = document.getElementById('routeNames');
@@ -206,14 +229,9 @@ function buildRoutes(meta, sceneSize) {
     // surface normal and verifies each one against the mesh, so nothing is offset here
     const pts = r.points.map(p => new THREE.Vector3(...p));
     // LineBasicMaterial ignores linewidth on almost every platform, so use the fat-line addon
-    const geom = new LineGeometry();
-    geom.setPositions(pts.flatMap(p => [p.x, p.y, p.z]));
-    const lm = new LineMaterial({ color: gradeColor(r.grade, r.gradeSystem), linewidth: 3 });
-    lm.resolution.set(innerWidth, innerHeight);
-    lineMaterials.push(lm);
-    const line = new Line2(geom, lm);
-    line.computeLineDistances();
-    routeGroup.add(line);
+    const colour = gradeColor(r.grade, r.gradeSystem);
+    routeGroup.add(fatLine(pts, contrastColor(colour), 4.5, 1, true));
+    routeGroup.add(fatLine(pts, colour, 3, 2));
     const nodes = r.nodes || (r.types || []).map((t, i) => ({ index: i, type: t }));
     for (const n of nodes) if (n.type === 'anchor' && pts[n.index]) anchors.push(pts[n.index]);
     const label = labelSprite(`${r.name}${r.grade ? '  ' + r.grade : ''}`, sceneSize);
