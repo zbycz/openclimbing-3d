@@ -40,7 +40,11 @@ kaggle kernels logs pavelzbytovsk/korno-v2-mvs --follow
 | raw mesh | 17 050 230 triangles |
 | `korno_v2.glb` | 90 MiB — 3 000 000 triangles, 8192 × 4500 texture |
 | `korno_v2_light.glb` | 11 MiB — 380 000 triangles, 2048 × 1124 texture |
-| runtime | 2 h 21 m on one P100 (80 min of that is dense stereo) |
+| `korno_v2_desmudged.glb` | 90 MiB — 2 531 404 triangles, same texture size, **baked from the photos** |
+| `korno_v2_desmudged_light.glb` | 12 MiB — 377 004 triangles, 2048 × 1124 |
+| runtime | 2 h 21 m on one P100 (80 min of that is dense stereo), + 31 min CPU for the re-texture |
+
+The viewer's `texture` switch loads either bake over the same geometry.
 
 ## Getting CUDA COLMAP onto Kaggle
 
@@ -169,3 +173,51 @@ ones already placed, so zooming in — which spreads the feet apart on screen �
 A second pass widens a label to include the route's name wherever that still fits. Clicking one opens the
 route on openclimbing; the overlay stays pointer-transparent and the click is hit-tested against the boxes
 drawn last frame, so an orbit that happens to end on a label does not navigate away.
+
+
+## Texture from the photos ([`kaggle/texture`](kaggle/texture))
+
+The original bake takes each texel's colour from the **dense point cloud** — an inverse-distance
+blend of the six nearest points. That caps texture detail at the local point density, and the point
+density collapses above h ≈ 1.55, where the drone only ever saw the wall at a grazing angle from far
+away: 0.0029 units between points below the line, 0.011 above it, against a texel of 0.00184. One
+measurement smeared over six texels is mush no matter how large the texture is. The hard "edge"
+along the wall is the same thing seen from the side — it is the boundary of what
+`stereo_fusion --min_num_pixels 4` accepted, a data boundary rather than geometry.
+
+So the geometry and the planar UV frame are reproduced exactly and only the bake is replaced:
+
+```
+texel -> ray along the orthophoto axis -> surface point + normal        (position map, 36.9 M rays)
+      -> project into all 102 posed photos
+      -> reject: behind the camera, outside the frame, cos < 0.15, occluded (per-photo depth map)
+      -> score by sampling density, cos / d²,  with a fade at the frame edges
+      -> blend the best three with (s / s_best)^8 and sample the original 8000 × 4500 pixels
+```
+
+Because the atlas is an orthophoto, `to_uv` simply drops the component along the view axis — so a
+texel *is* a line through the scene and the position map is one ray-cast per texel, no rasteriser
+needed. Occlusion is a lookup in a 1024 px depth map per photo rather than a second ray. The
+blending exponent is high on purpose: it is the single best view almost everywhere and a narrow
+cross-fade only where two photos are equally good, so misregistration never blurs the interior.
+
+| | |
+|---|---|
+| texels on the surface | 32.7 M of 36.9 M (88.7 %) |
+| of those, seen by ≥ 1 photo | **97.9 %** — the rest keep the old bake |
+| exposure gains | mean 1.02–1.05, 20 photos clipped at ±18 % |
+| local contrast (mean abs. Laplacian) | 4.82 → 35.48, **7.4×** |
+| runtime | 31 min on a Kaggle CPU kernel |
+
+`compare_texture.jpg` is the before/after sheet — four crops up the wall, old bake left, photos right.
+
+**The old bake was softening the whole wall, not just the top.** Local contrast rose 9–20× in the
+upper bands as expected, but also 4–7× at the foot, where the point cloud was already denser than the
+texture. Blending six neighbours is a blur even when the neighbours are close, and the metric shows
+it: the old bake's contrast falls monotonically with height (8.2 → 1.2) while the new one is roughly
+flat (44 → 11). That band structure *was* the defect.
+
+Two limits remain, neither fixable from the bake. The planar projection still stretches the texture
+on faces more than 45° off the wall plane (17 % of triangles) — that wants a real unwrap. And the
+*geometry* above h ≈ 1.85 is still built from very few depth measurements; only a flight that looks
+at it can fix that.

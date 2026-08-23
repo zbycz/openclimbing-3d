@@ -13,6 +13,7 @@ v2/kaggle/            dense MVS (GPU) + probe
 v2/kaggle/bolts/      YOLO ONNX inference, CPU
 v2/kaggle/bolts3d/    detections -> 3D, CPU
 v2/kaggle/routes/     openclimbing route paths -> 3D, CPU
+v2/kaggle/texture/    re-bake the texture from the photos, CPU
 ```
 
 ## Working rules
@@ -112,7 +113,7 @@ Bolts and routes are separate JSON files the viewer overlays. `korno_v2.glb` and
   Resample, lift along the mesh normal, verify each point by casting back from the camera, then
   simplify with a tolerance *below* the lift so the remaining chords cannot eat through it.
 
-## The blurry band above h ≈ 1.55
+## The blurry band above h ≈ 1.55 (fixed)
 
 Parts of `korno_v2.glb` are photo-sharp and parts are smeared, with a false "edge" running the
 length of the wall between them. Measured, not guessed:
@@ -138,22 +139,53 @@ sharp as the photo. Above it one measurement is spread over ~6 texels, so the ba
 mush no matter how large the texture is. The planar UV projection makes it worse on steep faces,
 where a square of texture is stretched over a much larger square of rock.
 
-**How to fix it, in order of payoff.**
+**Fixed by re-baking from the photos** — `v2/kaggle/texture/`, 31 min on a CPU kernel, output
+`korno_v2_desmudged.glb`. The geometry and the planar UV frame are reproduced byte-for-byte (same
+17 050 230-triangle cleaned mesh, same 8192 × 4500 atlas, same 0.00184 texel) and only the bake
+changes: every texel is ray-cast to its surface point, projected into all 102 posed photos, filtered
+for occlusion against a per-photo depth map, scored by sampling density and sampled from the original
+8000 × 4500 pixels. Local contrast (mean absolute Laplacian) went 4.82 → 35.48, **7.4×**; 9–20× in
+the upper bands and still 4–7× at the foot.
 
-1. **Texture from the photos instead of from the point cloud.** This is the big one and it does not
-   need a new flight. `mvs-texturing` (`texrecon`) or OpenMVS `TextureMesh` both take COLMAP output
-   directly: for each triangle they pick the best-viewing photo and sample the original 8000 × 4500
-   pixels, with seam levelling and global colour adjustment. Texture detail then depends on what the
-   photos saw, not on how many depth points survived fusion — so the upper band comes back to roughly
-   photo resolution even though its *geometry* stays coarse. Expect a CPU kernel of an hour or two.
-2. **Real UV unwrap** (xatlas) instead of the planar projection, so steep faces stop being stretched
-   and the texture budget is spent evenly. Worth doing at the same time as (1).
-3. **Lower `--min_num_pixels` to 2–3 for the upper band** (or run fusion twice and merge). More
-   points up there, at the cost of more noise — this softens the false edge but does not make the
-   texture sharp on its own.
-4. **More photos.** The only fix for the *geometry* above h ≈ 1.85 is a flight that actually looks
-   at it — a higher pass, or an orbit with the camera tilted up. Nothing in post can invent
-   measurements that were never taken.
+Things worth knowing next time:
 
-Note that (1) alone should remove almost all of the visible complaint: the smudged look is the bake,
-and the bake is fixable from data already on disk.
+- **The point-cloud bake was blurring the whole wall, not just the top.** It blends the six nearest
+  points by inverse distance, which is a blur even where the points are denser than a texel. The
+  giveaway is in the metric: the old bake's local contrast falls monotonically with height
+  (8.2 → 1.2 from foot to top) while the photo bake is roughly flat (44 → 11). That band structure
+  *was* the defect — "sharp at the bottom" was only sharp by comparison.
+- **97.9 % of the surface texels are seen by at least one photo**, including the upper band. The
+  problem was never coverage, it was that the bake threw the coverage away.
+- **Do not go shopping for a texturing package.** conda-forge has no `openmvs` and no
+  `mvs-texturing`; building either is a gamble to spend a kernel run on. A per-texel bake is ~200
+  lines of numpy + Open3D on top of what this repo already installs, and every knob stays visible.
+- **A planar UV atlas makes the position map trivial**: `to_uv` drops the component along the view
+  axis, so a texel *is* a line through the scene — one ray-cast per texel, no rasteriser. 36.9 M
+  rays took 15.5 s. Occlusion is a lookup in a 1024 px depth map per photo, not a second ray:
+  102 depth maps cost 21 s.
+- **Blend narrowly.** `w = (s / s_best)^8` over the best three views is the single best view almost
+  everywhere and a thin cross-fade only where two are equally good, so the ~3 px misregistration
+  never blurs the interior.
+- **Fit exposure gains against the old bake.** It is an average over every view that saw a point, so
+  it is a stable photometric anchor. PIL's `img.draft("RGB", …)` decodes at 1/8 scale, so estimating
+  the gains costs 29 s instead of a second full pass over 103 photos. Gains came out at 1.02–1.05
+  mean with 20 of 102 photos clipped at ±18 %, and no seams are visible at zoom.
+- **A sharper texture is a bigger JPEG**: 9.9 → 22.1 MiB at the same pixel count, so the triangle
+  budget for the same 92 MiB file dropped 3.0 M → 2.53 M. Detail moved from geometry to texture,
+  which on this wall is the better trade.
+- `pycolmap`: `Camera.rescale(W, H)` scales `f`, `cx`, `cy` and leaves the radial term alone (it is
+  in normalised coordinates), so a 3200-px SfM camera maps onto the 8000-px original exactly —
+  verified as a clean 2.5×. `img_from_cam` takes camera-frame `(m, 3)` points and returns NaN behind
+  the camera. Construct the copy at the *original* size and then rescale; building it at the target
+  size makes `rescale` a no-op.
+
+**What is still not fixed** (and cannot be, from the bake):
+
+1. **The planar UV projection still stretches** the texture on faces more than 45° off the wall plane
+   — 17 % of triangles, 4 % beyond 60°. A real unwrap (xatlas) would spend the texture budget evenly.
+   Not attempted here: xatlas on 3 M triangles is slow and would change the parametrisation, which
+   would have made the before/after comparison meaningless.
+2. **The geometry above h ≈ 1.85 is still built from very few depth measurements.** Lowering
+   `--min_num_pixels` to 2–3 would add points there at the cost of noise, but the only real fix is a
+   flight that actually looks at the top of the wall. Nothing in post can invent measurements that
+   were never taken.

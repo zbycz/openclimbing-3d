@@ -142,9 +142,25 @@ navigate.
 >
 > A ještě mi sem napiš, proč je ta textura od toho 1.5m taková rozmazaná a jestli by to šlo nějak řešit.
 
+## 15. Fixing the smudge
+
+> ok, vyřeš to nějak nejlíp jak to půjde. Klidně spusť i nový běh na kaggle kdyby to bylo potřeba.
+>
+> Zachovej původní glb fily v repu, vyrob třeba nové korno_v2_desmudged.glb abych si to mohl v prohlížečce porovnat.
+
+conda-forge has neither `openmvs` nor `mvs-texturing`, and building one to find out is a gamble worth
+a kernel run, so the bake was written directly: `v2/kaggle/texture/` reproduces the geometry and the
+planar UV frame byte-for-byte and replaces only where the colour comes from. Every texel is ray-cast
+to its surface point, projected into all 102 posed photos, filtered against a per-photo depth map,
+scored by sampling density and sampled from the original 8000 × 4500 pixels; the best three views are
+blended narrowly and per-photo exposure gains are fitted against the old bake. 31 min on a CPU kernel.
+Local contrast went up **7.4×** overall — 9–20× in the upper bands, and still 4–7× at the foot,
+because blending six nearest points was softening the whole wall rather than only the top. The viewer
+gained a picker so both bakes can be compared over the same geometry.
+
 ---
 
 ## Texture sharpness
 
-The full answer to chapter 7, including what would fix it, is in
-[`CLAUDE.md`](CLAUDE.md#the-blurry-band-above-h--155).
+The full answer to chapter 7, what fixed it and what is still open, is in
+[`CLAUDE.md`](CLAUDE.md#the-blurry-band-above-h--155-fixed).
