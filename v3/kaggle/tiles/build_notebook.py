@@ -71,8 +71,10 @@ CFG = dict(
     TEX_Q     = 90,
     ERR_PCT   = 99.0,     # percentile of the sampled deviation used as the tile's geometric error
     ERR_SAMPLES = 40000,
-    SKIRT_MUL = 3.0,      # skirt depth = this * the tile's geometric error (floored, see below)
-    SKIRT_MIN = 0.004,    # ~1 cm at this scene scale
+    SKIRT_MUL = 1.5,      # skirt depth = this * the tile's geometric error. The gap a skirt has
+                          # to cover is bounded by that error, so 1.5x is margin enough - deeper
+                          # skirts show as dark wedges along the tile seams at grazing angles.
+    SKIRT_MIN = 0.002,    # ~6 mm at this scene scale
 )
 os.makedirs(CFG["TILES"], exist_ok=True)
 T0 = time.time()
