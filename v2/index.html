@@ -88,10 +88,10 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 // thin out. `bytes` are the real uncompressed sizes — Pages gzips the GLB, so the browser counts
 // decompressed bytes against a compressed Content-Length and the progress bar would overshoot.
 const MODELS = [
+  { f: 'korno_v2_desmudged.glb',       tex: 'photos',      det: 'full',  bytes: 94014176 },
+  { f: 'korno_v2_desmudged_light.glb', tex: 'photos',      det: 'light', bytes: 12122376 },
   { f: 'korno_v2.glb',                 tex: 'point cloud', det: 'full',  bytes: 94374136 },
   { f: 'korno_v2_light.glb',           tex: 'point cloud', det: 'light', bytes: 11715528 },
-  { f: 'korno_v2_desmudged.glb',       tex: 'photos',      det: 'full',  bytes: 0 },
-  { f: 'korno_v2_desmudged_light.glb', tex: 'photos',      det: 'light', bytes: 0 },
 ];
 const params = new URLSearchParams(location.search);
 const FILE = params.get('f') || MODELS[0].f;
