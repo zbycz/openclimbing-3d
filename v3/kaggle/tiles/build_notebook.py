@@ -264,8 +264,8 @@ def submesh(Vs, Fs, Ns, face_idx):
     return sm
 
 
+# split this level's mesh into its grid by the UV of each triangle's centroid
 def cut(level):
-    """Split this level's mesh into its grid by the UV of each triangle's centroid."""
     lm = LEVEL_MESH[level]
     Vs = np.asarray(lm.vertices).astype(np.float32)
     Fs = np.asarray(lm.triangles).astype(np.int32)
