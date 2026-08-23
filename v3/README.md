@@ -57,6 +57,44 @@ queued nearest-first, six in flight, and tiles unused for 25 s have their GPU me
 The route, bolt and camera overlays are read from `../v2/` — v3 shares v2's coordinate frame and
 does not duplicate the metadata.
 
+## Result
+
+| level | tiles | triangles | MB | error (median) |
+|---|---|---|---|---|
+| 0 | 2 | 29 056 | 0.9 | 0.0214 (~7 cm) |
+| 1 | 8 | 118 572 | 3.7 | 0.0093 |
+| 2 | 32 | 468 557 | 14.2 | 0.0047 |
+| 3 | 125 | 1 536 863 | 48.2 | 0.0027 |
+| 4 | 480 | **17 519 252** | 435.9 | 0.0018 (~6 mm) |
+| | **647** | | **502.8** | |
+
+Measured in the viewer at 1400 × 900, from a cold cache:
+
+| view | tiles drawn | triangles on screen | downloaded |
+|---|---|---|---|
+| first paint | 2 (L0) | — | **0.47 MB**, 1.3 s |
+| whole wall | 8 (L1) | 0.12 M | 3.1 MB |
+| zoomed in | 26 (L1+L2) | 0.39 M | 10.8 MB |
+| closer | 56 (L2+L3) | 0.84 M | 26.7 MB |
+| hard zoom | 78 (L3+L4) | 3.14 M | 127 MB |
+
+So even at the deepest zoom a session pulls about a quarter of the 503 MB, and what is on screen is the
+original mesh. Build time is 7.5 min on a Kaggle CPU kernel.
+
+Three bugs were worth the two extra runs it took to find them, all of them invisible in the numbers
+and obvious on screen:
+
+- `Object.assign(t, { children: [] })` wrote into the same object the child keys were about to be
+  read from, so every node came out childless and the tree never refined at all.
+- `viewing_direction()` points *from* the camera into the scene, so `-VIEW` extruded the skirts
+  towards the viewer and pasted them over the wall.
+- `TriangleMesh += TriangleMesh` concatenates without welding. The children's seam vertices stayed
+  duplicated, so every seam remained a boundary, propagated up the pyramid, and the decimator could
+  not collapse across any of them.
+
+Skirt depth also matters more than it looks: at 3 × the node's error the seams showed as dark wedges
+at grazing angles. The gap a skirt has to cover is bounded by that error, so 1.5 × is margin enough.
+
 ## Hosting
 
 The pyramid is ~half a gigabyte, which does not fit in the 1 GB GitHub Pages budget alongside

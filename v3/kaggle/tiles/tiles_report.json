@@ -1,0 +1,77 @@
+{
+ "cfg": {
+  "INPUT_DIR": "/kaggle/input",
+  "OUT": "/kaggle/working",
+  "TILES": "/kaggle/working/tiles",
+  "BASE": [
+   2,
+   1
+  ],
+  "LEVELS": 5,
+  "TEX_MAX": 512,
+  "TEX_Q": 90,
+  "ERR_PCT": 99.0,
+  "ERR_SAMPLES": 40000,
+  "SKIRT_MUL": 1.5,
+  "SKIRT_MIN": 0.002
+ },
+ "timings": {
+  "mesh": 88.9,
+  "atlas": 1.2,
+  "partition": 1.5,
+  "pyramid": 338.6
+ },
+ "mesh": {
+  "triangles": 17050230,
+  "vertices": 8524051
+ },
+ "atlas": [
+  8192,
+  4500
+ ],
+ "leaf_grid": [
+  32,
+  16
+ ],
+ "leaf_tris": {
+  "min": 0,
+  "median": 9091,
+  "max": 176416,
+  "empty": 32
+ },
+ "budget": 14248,
+ "levels": {
+  "4": {
+   "tiles": 480,
+   "tris": 17519252,
+   "bytes": 435876425,
+   "err": 0.00184
+  },
+  "3": {
+   "tiles": 125,
+   "tris": 1536863,
+   "bytes": 48191744,
+   "err": 0.00269
+  },
+  "2": {
+   "tiles": 32,
+   "tris": 468557,
+   "bytes": 14225194,
+   "err": 0.0047
+  },
+  "1": {
+   "tiles": 8,
+   "tris": 118572,
+   "bytes": 3652957,
+   "err": 0.0093
+  },
+  "0": {
+   "tiles": 2,
+   "tris": 29056,
+   "bytes": 892282,
+   "err": 0.02139
+  }
+ },
+ "total_mb": 502.8,
+ "total_s": 459
+}
