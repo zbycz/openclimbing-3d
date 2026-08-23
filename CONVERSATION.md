@@ -163,4 +163,4 @@ gained a picker so both bakes can be compared over the same geometry.
 ## Texture sharpness
 
 The full answer to chapter 7, what fixed it and what is still open, is in
-[`CLAUDE.md`](CLAUDE.md#the-blurry-band-above-h--155-fixed).
+[`CLAUDE.md`](CLAUDE.md#why-the-texture-was-smudged-and-what-fixed-it).
