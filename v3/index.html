@@ -460,7 +460,7 @@ window.__tileGroup = tileGroup;   // so a test harness can see which levels are 
 const loader = new THREE.TextureLoader();
 const MAXANISO = renderer.capabilities.getMaxAnisotropy();
 
-let TILES = null, ROOTS = [];
+let TILES = null, ROOTS = [], VERSION = '';
 const stats = { loaded: 0, bytes: 0, drawn: 0, tris: 0, inflight: 0 };
 const streamEl = document.getElementById('stream');
 
@@ -500,8 +500,8 @@ function pump() {
     t.state = 'loading';
     stats.inflight++;
     Promise.all([
-      fetch(`${TILE_BASE}${t.key}.bin`).then(r => r.arrayBuffer()),
-      new Promise(res => loader.load(`${TILE_BASE}${t.key}.jpg`, res, undefined, () => res(null))),
+      fetch(`${TILE_BASE}${t.key}.bin${VERSION}`).then(r => r.arrayBuffer()),
+      new Promise(res => loader.load(`${TILE_BASE}${t.key}.jpg${VERSION}`, res, undefined, () => res(null))),
     ]).then(([buf, tex]) => {
       const { geometry, tris, bytes } = parseTile(buf);
       if (tex) {
@@ -613,6 +613,7 @@ const rejectedPromise = fetch('../v2/korno_v2_bolts_rejected.json').then(r => (r
 const routePromise = fetch('../v2/korno_v2_routes.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
 
 fetch(`${TILE_BASE}index.json`).then(r => r.json()).then(async index => {
+  VERSION = index.version ? `?v=${index.version}` : '';
   TILES = {};
   for (const key in index.tiles) {
     const raw = index.tiles[key];

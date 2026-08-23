@@ -23,9 +23,18 @@ level 3  16 x 8
 level 4  32 x 16 tiles    the original triangles, undecimated
 ```
 
-Every triangle of the full mesh lands in exactly one leaf, sorted by the UV of its centroid. Each
-parent is its four children merged and decimated back to one tile's budget, so cost per tile is
-roughly constant and each level up is 4× coarser per unit area.
+**The whole mesh is decimated once per level and only then cut into that level's grid.** Every
+triangle goes wholly to one tile, so neighbours on the same level share their boundary vertices
+exactly and meet with no crack at all. The obvious construction — build each tile by decimating its
+own four children — cracks along *every* seam instead, because two neighbours simplified
+independently no longer agree on the boundary they share; skirts only hide that, and the grid of
+seams stays visible. Levels are cascaded (17 M → 1.9 M → 480 k → 119 k → 29 k), so each level up is
+about 4× coarser per unit area and costs one decimation, not one per tile.
+
+Only transitions *between* levels can still gap, and shallow skirts cover those. Sketchfab and Nexus
+fix those too, with a batched multi-triangulation: the partition alternates between levels so each
+level's seams fall inside the next level's cells and get simplified away. That needs a DAG rather
+than a tree — this is the tree-shaped 90 % of it.
 
 Three details make it work:
 
@@ -61,12 +70,12 @@ does not duplicate the metadata.
 
 | level | tiles | triangles | MB | error (median) |
 |---|---|---|---|---|
-| 0 | 2 | 29 056 | 0.9 | 0.0214 (~7 cm) |
-| 1 | 8 | 118 572 | 3.7 | 0.0093 |
-| 2 | 32 | 468 557 | 14.2 | 0.0047 |
-| 3 | 125 | 1 536 863 | 48.2 | 0.0027 |
+| 0 | 2 | 29 084 | 0.9 | 0.0198 (~6 cm) |
+| 1 | 8 | 119 272 | 3.6 | 0.0089 |
+| 2 | 32 | 479 942 | 14.4 | 0.0047 |
+| 3 | 125 | 1 916 904 | 56.6 | 0.0027 |
 | 4 | 480 | **17 519 252** | 435.9 | 0.0018 (~6 mm) |
-| | **647** | | **502.8** | |
+| | **647** | | **511.4** | |
 
 Measured in the viewer at 1400 × 900, from a cold cache:
 
@@ -78,8 +87,8 @@ Measured in the viewer at 1400 × 900, from a cold cache:
 | closer | 56 (L2+L3) | 0.84 M | 26.7 MB |
 | hard zoom | 78 (L3+L4) | 3.14 M | 127 MB |
 
-So even at the deepest zoom a session pulls about a quarter of the 503 MB, and what is on screen is the
-original mesh. Build time is 7.5 min on a Kaggle CPU kernel.
+So even at the deepest zoom a session pulls about a quarter of the 511 MB, and what is on screen is the
+original mesh. Build time is 8.5 min on a Kaggle CPU kernel.
 
 Three bugs were worth the two extra runs it took to find them, all of them invisible in the numbers
 and obvious on screen:
@@ -95,6 +104,12 @@ and obvious on screen:
 Skirt depth also matters more than it looks: at 3 × the node's error the seams showed as dark wedges
 at grazing angles. The gap a skirt has to cover is bounded by that error, so 1.5 × is margin enough.
 
+One more, and the reason a fourth run was needed: the notebook generator was invoked as
+`python3 build_notebook.py >/dev/null 2>&1; <check>`. It was failing — a `"""` docstring inside a
+`r"""…"""` cell string closes the cell — but the output was discarded and the `;` let the next
+command run anyway, so the *stale* `.ipynb` got pushed and syntax-checked clean. Two runs produced
+byte-identical triangle counts before that was noticed. Generate with `&&` and let it speak.
+
 ## Hosting
 
 The pyramid is ~half a gigabyte, which does not fit in the 1 GB GitHub Pages budget alongside
@@ -105,8 +120,11 @@ everything else, so **it is not in this repo** (`v3/tiles/` is gitignored). It i
 which is the viewer's default; `?tiles=https://other-host/path/` overrides it. That box runs nginx
 with `root /srv/www`, `Access-Control-Allow-Origin: *` on everything (the viewer fetches geometry
 with `fetch()` and textures through WebGL, both cross-origin from Pages), gzip on `.bin` and
-`.json`, a seven-day `Cache-Control` on tiles and `no-cache` on `index.json` so a rebuilt pyramid
-cannot be read against a stale tree. Cloudflare's tunnel maps the hostname to port 80.
+`.json`, a seven-day `Cache-Control` on tiles and `no-cache` on `index.json`. Cloudflare's tunnel maps the
+hostname to port 80 — and caches the tiles at its edge, so `index.json` carries a build `version`
+that the viewer appends to every tile URL. Without it a rebuilt pyramid is read against whatever
+tiles the edge still holds; that is exactly what happened on the first redeploy, and the two tiles
+that had been fetched during verification came back stale while everything else was current.
 
 To redeploy after a rebuild:
 

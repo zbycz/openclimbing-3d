@@ -428,6 +428,9 @@ for (lv, i, j), n in NODES.items():
 
 index = {
     "format": "korno-v3-tiles/1",
+    # tiles are cached hard at the edge, so a rebuilt pyramid has to change their URLs or the
+    # viewer reads a new tree against stale geometry
+    "version": time.strftime("%Y%m%d%H%M%S", time.gmtime()),
     "note": "positions are in the same coordinate frame as korno_v2.glb",
     "levels": CFG["LEVELS"],
     "base": list(CFG["BASE"]),
