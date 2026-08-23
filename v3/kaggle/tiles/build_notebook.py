@@ -67,7 +67,9 @@ CFG = dict(
 
     BASE      = (2, 1),   # tiles at level 0
     LEVELS    = 5,        # 0..4, so the leaf grid is 32 x 16
-    TEX_MAX   = 512,      # per-tile texture, capped; finer tiles keep their native atlas crop
+    TEX_MAX   = 1024,     # per-tile texture, capped; finer tiles keep their native atlas crop.
+                          # Only L0-L2 are capped at all (42 tiles), so raising this is nearly
+                          # free and it is what coarse tiles look blurry from.
     TEX_Q     = 90,
     ERR_PCT   = 99.0,     # percentile of the sampled deviation used as the tile's geometric error
     ERR_SAMPLES = 40000,
