@@ -455,6 +455,7 @@ function buildCameras(meta, sceneSize) {
 // holes — the same "replacement refinement with parent fallback" 3D Tiles uses.
 const tileGroup = new THREE.Group();
 scene.add(tileGroup);
+window.__tileGroup = tileGroup;   // so a test harness can see which levels are on screen
 const loader = new THREE.TextureLoader();
 const MAXANISO = renderer.capabilities.getMaxAnisotropy();
 
