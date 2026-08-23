@@ -212,51 +212,76 @@ stamp("partition", t)
 
 md(
     """
-## 3. Build the pyramid bottom-up
+## 3. Build the pyramid: decimate globally, *then* cut
 
-A node holds a *core* mesh (what gets decimated and what its parent is built from) and, on disk, that
-core plus skirts. The skirt is added last so it never feeds into the next level up.
+The obvious construction — build each tile by decimating its own four children — cracks along every
+seam, because two neighbours decimated independently no longer agree on the boundary they share.
+Skirts hide that, but only approximately, and the grid of seams stays visible.
+
+So the whole mesh is decimated once per level and only then cut into that level's grid. Every
+triangle goes wholly to one tile, so neighbours on the same level share their boundary vertices
+*exactly* and meet with no crack at all. Only transitions between levels can still gap, and shallow
+skirts cover those.
+
+(Sketchfab and Nexus solve the level transitions too, with a batched multi-triangulation: the
+partition alternates between levels so each level's seams fall inside the next level's cells and get
+simplified away. That needs a DAG rather than a tree — this is the tree-shaped 90 % of it.)
 """
 )
 
 code(
     r"""
-BUDGET = int(np.median(counts[counts > 0]))    # every tile lands on ~the same triangle count,
-                                              # so each level up is 4x coarser per unit area
+BUDGET = int(np.median(counts[counts > 0]))    # triangles per tile, roughly constant per level
 print("tile budget:", BUDGET, "triangles")
 REPORT["budget"] = BUDGET
 
-
-def submesh(face_idx):
-    f = F[face_idx]
-    uniq, inv = np.unique(f, return_inverse=True)
-    m = o3d.geometry.TriangleMesh(
-        o3d.utility.Vector3dVector(V[uniq].astype(np.float64)),
-        o3d.utility.Vector3iVector(inv.reshape(-1, 3).astype(np.int32)))
-    m.vertex_normals = o3d.utility.Vector3dVector(N[uniq].astype(np.float64))
-    return m
+V0, F0, N0 = V, F, N            # the originals stay for measuring error against
 
 
-# leaf: the original triangles; otherwise the four children merged and decimated back
-def core_of(level, i, j, children):
-    if level == CFG["LEVELS"] - 1:
-        c = starts[j * GX + i], ends[j * GX + i]
-        if c[1] <= c[0]:
-            return None
-        return submesh(order[c[0]:c[1]])
-    m = o3d.geometry.TriangleMesh()
-    for ch in children:
-        m += ch
-    if len(m.triangles) == 0:
-        return None
-    # `+=` concatenates without welding: the children share their seam vertices exactly, and left
-    # unwelded those seams stay boundaries all the way up and the decimator cannot cross them
-    m.remove_duplicated_vertices()
-    m.remove_degenerate_triangles()
-    if len(m.triangles) > BUDGET:
-        m = m.simplify_quadric_decimation(BUDGET)
+def grid_of(level):
+    return CFG["BASE"][0] * 2 ** level, CFG["BASE"][1] * 2 ** level
+
+
+# one decimation per level, cascaded, so each level is a single consistent mesh
+LEVEL_MESH = {CFG["LEVELS"] - 1: mesh}
+m = mesh
+for lv in range(CFG["LEVELS"] - 2, -1, -1):
+    gx, gy = grid_of(lv)
+    target = min(len(m.triangles), BUDGET * gx * gy)
+    m = m.simplify_quadric_decimation(int(target))
     m.compute_vertex_normals()
-    return m
+    LEVEL_MESH[lv] = m
+    print(f"  L{lv}: {len(m.triangles)} triangles", flush=True)
+
+
+def submesh(Vs, Fs, Ns, face_idx):
+    f = Fs[face_idx]
+    uniq, inv = np.unique(f, return_inverse=True)
+    sm = o3d.geometry.TriangleMesh(
+        o3d.utility.Vector3dVector(Vs[uniq].astype(np.float64)),
+        o3d.utility.Vector3iVector(inv.reshape(-1, 3).astype(np.int32)))
+    sm.vertex_normals = o3d.utility.Vector3dVector(Ns[uniq].astype(np.float64))
+    return sm
+
+
+def cut(level):
+    """Split this level's mesh into its grid by the UV of each triangle's centroid."""
+    lm = LEVEL_MESH[level]
+    Vs = np.asarray(lm.vertices).astype(np.float32)
+    Fs = np.asarray(lm.triangles).astype(np.int32)
+    Ns = np.asarray(lm.vertex_normals).astype(np.float32)
+    uv = ((to_uv(np.asarray(lm.vertices)) - UV_LO) / UV_SPAN).astype(np.float32)
+    gx, gy = grid_of(level)
+    cu = (uv[Fs[:, 0], 0] + uv[Fs[:, 1], 0] + uv[Fs[:, 2], 0]) / 3.0
+    cv = (uv[Fs[:, 0], 1] + uv[Fs[:, 1], 1] + uv[Fs[:, 2], 1]) / 3.0
+    gi = np.clip((cu * gx).astype(np.int32), 0, gx - 1)
+    gj = np.clip((cv * gy).astype(np.int32), 0, gy - 1)
+    k = (gj.astype(np.int64) * gx + gi)
+    o = np.argsort(k, kind="stable")
+    kk = k[o]
+    st = np.searchsorted(kk, np.arange(gx * gy), side="left")
+    en = np.searchsorted(kk, np.arange(gx * gy), side="right")
+    return Vs, Fs, Ns, o, st, en, gx, gy
 
 
 # 99th-percentile distance from the original triangles under this node to the node's own surface
@@ -270,7 +295,7 @@ def geometric_error(m, level, i, j):
         return 0.0
     if len(idx) > CFG["ERR_SAMPLES"]:
         idx = idx[np.linspace(0, len(idx) - 1, CFG["ERR_SAMPLES"]).astype(np.int64)]
-    tri = V[F[idx]]
+    tri = V0[F0[idx]]
     w = np.random.default_rng(0).dirichlet((1, 1, 1), len(idx)).astype(np.float32)
     pts = (tri * w[:, :, None]).sum(1)
     sc = o3d.t.geometry.RaycastingScene()
@@ -370,31 +395,20 @@ code(
 t = time.time()
 NODES = {}
 built = 0
-
-
-def build(level, i, j):
-    global built
-    kids = []
-    if level < CFG["LEVELS"] - 1:
-        for a in (0, 1):
-            for b in (0, 1):
-                c = build(level + 1, i * 2 + a, j * 2 + b)
-                if c is not None:
-                    kids.append(c)
-    m = core_of(level, i, j, kids)
-    if m is None or len(m.triangles) == 0:
-        return None
-    err = geometric_error(m, level, i, j)
-    NODES[(level, i, j)] = write_tile(level, i, j, m, err)
-    built += 1
-    if built % 100 == 0:
-        print(f"  {built} tiles ({time.time() - t:.0f} s)", flush=True)
-    return m
-
-
-for i in range(CFG["BASE"][0]):
-    for j in range(CFG["BASE"][1]):
-        build(0, i, j)
+for level in range(CFG["LEVELS"]):
+    Vs, Fs, Ns, o, st, en, gx, gy = cut(level)
+    for j in range(gy):
+        for i in range(gx):
+            c = j * gx + i
+            if en[c] <= st[c]:
+                continue
+            sm = submesh(Vs, Fs, Ns, o[st[c]:en[c]])
+            err = geometric_error(sm, level, i, j)
+            NODES[(level, i, j)] = write_tile(level, i, j, sm, err)
+            built += 1
+            if built % 100 == 0:
+                print(f"  {built} tiles ({time.time() - t:.0f} s)", flush=True)
+    print(f"  level {level}: {gx}x{gy} grid done", flush=True)
 print(f"{len(NODES)} tiles written")
 stamp("pyramid", t)
 """
