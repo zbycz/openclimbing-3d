@@ -8,7 +8,7 @@
    1
   ],
   "LEVELS": 5,
-  "TEX_MAX": 512,
+  "TEX_MAX": 1024,
   "TEX_Q": 90,
   "ERR_PCT": 99.0,
   "ERR_SAMPLES": 40000,
@@ -16,10 +16,10 @@
   "SKIRT_MIN": 0.002
  },
  "timings": {
-  "mesh": 88.9,
-  "atlas": 1.2,
-  "partition": 1.5,
-  "pyramid": 338.6
+  "mesh": 67.0,
+  "atlas": 1.1,
+  "partition": 0.9,
+  "pyramid": 69.2
  },
  "mesh": {
   "triangles": 17050230,
@@ -41,37 +41,37 @@
  },
  "budget": 14248,
  "levels": {
-  "4": {
-   "tiles": 480,
-   "tris": 17519252,
-   "bytes": 435876425,
-   "err": 0.00184
-  },
-  "3": {
-   "tiles": 125,
-   "tris": 1536863,
-   "bytes": 48191744,
-   "err": 0.00269
-  },
-  "2": {
-   "tiles": 32,
-   "tris": 468557,
-   "bytes": 14225194,
-   "err": 0.0047
+  "0": {
+   "tiles": 2,
+   "tris": 29084,
+   "bytes": 1632432,
+   "err": 0.01939
   },
   "1": {
    "tiles": 8,
-   "tris": 118572,
-   "bytes": 3652957,
-   "err": 0.0093
+   "tris": 119272,
+   "bytes": 6465018,
+   "err": 0.00732
   },
-  "0": {
-   "tiles": 2,
-   "tris": 29056,
-   "bytes": 892282,
-   "err": 0.02139
+  "2": {
+   "tiles": 32,
+   "tris": 479942,
+   "bytes": 24651333,
+   "err": 0.00268
+  },
+  "3": {
+   "tiles": 125,
+   "tris": 1916904,
+   "bytes": 70990182,
+   "err": 0.00184
+  },
+  "4": {
+   "tiles": 480,
+   "tris": 17519252,
+   "bytes": 437945671,
+   "err": 0.00184
   }
  },
- "total_mb": 502.8,
- "total_s": 459
+ "total_mb": 541.7,
+ "total_s": 477
 }

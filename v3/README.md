@@ -70,12 +70,18 @@ does not duplicate the metadata.
 
 | level | tiles | triangles | MB | error (median) |
 |---|---|---|---|---|
-| 0 | 2 | 29 084 | 0.9 | 0.0198 (~6 cm) |
-| 1 | 8 | 119 272 | 3.6 | 0.0089 |
-| 2 | 32 | 479 942 | 14.4 | 0.0047 |
-| 3 | 125 | 1 916 904 | 56.6 | 0.0027 |
-| 4 | 480 | **17 519 252** | 435.9 | 0.0018 (~6 mm) |
-| | **647** | | **511.4** | |
+| 0 | 2 | 29 084 | 1.6 | 0.0194 (~6 cm) |
+| 1 | 8 | 119 272 | 6.5 | 0.0073 |
+| 2 | 32 | 479 942 | 24.7 | 0.0027 |
+| 3 | 125 | 1 916 904 | 71.0 | 0.0018 |
+| 4 | 480 | **17 519 252** | 437.9 | 0.0018 (~6 mm) |
+| | **647** | | **541.7** | |
+
+A tile's error is the larger of its measured geometric deviation and its texel size, and below level 1
+it is the **texel** that dominates — so tile texture resolution, not triangle count, is what decides
+when the viewer refines. Capping tile textures at 512 px made the coarse levels blurry and refinement
+lazy; at 1024 px only levels 0–2 are capped at all (42 tiles), which costs 30 MB and halves the error
+at levels 2 and 3.
 
 Measured in the viewer at 1400 × 900, from a cold cache:
 
