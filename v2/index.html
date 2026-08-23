@@ -28,8 +28,13 @@
   #hud label#routeNamesRow { margin-top: 3px; margin-left: 16px; color: #9aa3ad; }
   #hud input { vertical-align: middle; margin-right: 6px; }
   #hint { margin-top: 9px; color: #6b7480; font-size: 12px; }
-  #quality { margin-top: 6px; font-size: 12px; }
-  #quality a { color: #8fb3e8; }
+  #models { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.09); padding-top: 8px; }
+  #models .row { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+  #models .row > span { color: #6b7480; font-size: 11.5px; width: 46px; flex: none; }
+  #models a { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
+              color: #9aa3ad; text-decoration: none; border: 1px solid rgba(255,255,255,.12); }
+  #models a:hover { color: #e8eaed; border-color: rgba(255,255,255,.3); }
+  #models a.on { color: #0b0d10; background: #8fb3e8; border-color: #8fb3e8; font-weight: 600; }
   #status { position: fixed; inset: 0; display: grid; place-content: center; place-items: center; gap: 10px;
             text-align: center; z-index: 20; pointer-events: none; }
   #status.hidden { display: none; }
@@ -64,7 +69,7 @@
   <label><input type="checkbox" id="lit" checked> studio light</label>
   <label><input type="checkbox" id="invert"> invert mouse axes</label>
   <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom<br>Click a grade to open its route</p>
-  <p id="quality"></p>
+  <div id="models"></div>
   </div>
 </div>
 
@@ -78,15 +83,27 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
+// The same geometry twice, textured two different ways: `_desmudged` samples the original photos
+// per texel, the other bakes the colours of the dense points and goes soft wherever those points
+// thin out. `bytes` are the real uncompressed sizes — Pages gzips the GLB, so the browser counts
+// decompressed bytes against a compressed Content-Length and the progress bar would overshoot.
+const MODELS = [
+  { f: 'korno_v2_desmudged.glb',       tex: 'photos',      det: 'full',  bytes: 0 },
+  { f: 'korno_v2_desmudged_light.glb', tex: 'photos',      det: 'light', bytes: 0 },
+  { f: 'korno_v2.glb',                 tex: 'point cloud', det: 'full',  bytes: 94374136 },
+  { f: 'korno_v2_light.glb',           tex: 'point cloud', det: 'light', bytes: 11715528 },
+];
 const params = new URLSearchParams(location.search);
-const FILE = params.get('f') || 'korno_v2.glb';
-const LIGHT = 'korno_v2_light.glb';
-// GitHub Pages serves these gzipped, so the browser reports decompressed bytes loaded against a
-// compressed Content-Length and the bar overshoots. These are the real, uncompressed sizes.
-const SIZES = { 'korno_v2.glb': 94374136, 'korno_v2_light.glb': 11715528 };
-document.getElementById('quality').innerHTML = FILE === LIGHT
-  ? '<a href="?">full detail (90 MB)</a>'
-  : `<a href="?f=${LIGHT}">lighter version (11 MB)</a>`;
+const FILE = params.get('f') || MODELS[0].f;
+const CURRENT = MODELS.find(m => m.f === FILE) || MODELS[0];
+const SIZES = Object.fromEntries(MODELS.map(m => [m.f, m.bytes]));
+
+const pills = (key, fixed) => MODELS.filter(m => m[fixed] === CURRENT[fixed]).map(m =>
+  `<a class="pill${m.f === CURRENT.f ? ' on' : ''}" href="?f=${m.f}">${m[key]}` +
+  `${key === 'det' && m.bytes ? ` · ${Math.round(m.bytes / 1048576)} MB` : ''}</a>`).join('');
+document.getElementById('models').innerHTML =
+  `<div class="row"><span>texture</span>${pills('tex', 'det')}</div>` +
+  `<div class="row"><span>detail</span>${pills('det', 'tex')}</div>`;
 
 const hud = document.getElementById('hud');
 const collapseBtn = document.getElementById('collapse');
