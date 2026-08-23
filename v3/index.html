@@ -78,6 +78,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const params = new URLSearchParams(location.search);
 // Where the tile pyramid lives. It is ~half a gigabyte, so it is deliberately not in this repo and
@@ -86,9 +87,18 @@ const params = new URLSearchParams(location.search);
 // through WebGL and the geometry through fetch().
 const TILE_BASE = (params.get('tiles') ||
   'https://filehost.openclimbing.org/korno-tiles/').replace(/\/?$/, '/');
-// pixels of screen-space error a tile may show before the viewer refines into its children
-const MAX_SSE = Number(params.get('sse')) || 1.5;
-const MAX_INFLIGHT = 6;
+// Pixels of screen-space error a tile may show before the viewer refines into its children. A tile's
+// error is dominated by its texel size, so this is really "how far may a tile texture be magnified" —
+// anything above ~1 is visibly soft, because the texture was downsampled to make the tile in the
+// first place. Children are requested at PREFETCH x this, so they are usually there before they are
+// needed rather than arriving as a jump.
+//
+// Fading a tile in was tried and removed: an opacity ramp needs depthWrite off, and tiles that do
+// not write depth stop occluding each other, so you see straight through them to the coarser
+// surface behind. With refinement this eager the pops are small enough not to need hiding.
+const MAX_SSE = Number(params.get('sse')) || 0.7;
+const PREFETCH = 0.45;
+const MAX_INFLIGHT = 10;
 const EVICT_AFTER = 25000;      // ms a tile may stay unused before its GPU memory is released
 
 const hud = document.getElementById('hud');
@@ -113,6 +123,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// A photogrammetry texture already carries the light it was shot in, but rendering it against two
+// bare lights leaves it flat. Filmic tone mapping plus an environment map gives the rock reflected
+// light from every direction, which is what makes relief read as relief.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
 document.getElementById('stage').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -130,9 +145,11 @@ invertBox.addEventListener('change', e => {
   localStorage.setItem('korno.invert', e.target.checked ? '1' : '0');
 });
 
-// the texture already carries the daylight it was shot in, so keep the added light gentle
-const hemi = new THREE.HemisphereLight(0xffffff, 0x40505f, 2.0);
-const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environment = envMap;
+const hemi = new THREE.HemisphereLight(0xffffff, 0x40505f, 1.1);
+const dir = new THREE.DirectionalLight(0xffffff, 0.9);
 dir.position.set(0.6, 1.2, -1.4);
 scene.add(hemi, dir);
 
@@ -140,6 +157,7 @@ const meshes = [];
 let LIT = true;                     // tiles arrive continuously, so new ones must match the toggle
 document.getElementById('lit').addEventListener('change', e => {
   const on = LIT = e.target.checked;
+  scene.environment = on ? envMap : null;
   hemi.intensity = on ? 2.0 : 0;
   dir.intensity = on ? 1.1 : 0;
   meshes.forEach(m => {
@@ -511,7 +529,8 @@ function pump() {
       }
       // double-sided so the skirts that hide the cracks between levels are never back-facing
       const mat = new THREE.MeshStandardMaterial({
-        map: tex, metalness: 0, roughness: 1, side: THREE.DoubleSide });
+        map: tex, metalness: 0, roughness: 0.85, envMapIntensity: 0.55,
+        side: THREE.DoubleSide });
       if (!LIT) { mat.emissive = new THREE.Color(0xffffff); mat.emissiveMap = tex; }
       t.mesh = new THREE.Mesh(geometry, mat);
       t.mesh.frustumCulled = false;
@@ -539,6 +558,10 @@ function select(t, out, seen) {
   t.priority = 1 / dist;
   const sse = t.error * pixelsPerUnit / dist;
   const kids = t.children;
+  // start pulling the next level in well before it is needed
+  if (kids.length && sse > MAX_SSE * PREFETCH) {
+    for (const c of kids) if (frustum.intersectsBox(c.box)) request(c);
+  }
   if (!kids.length || sse <= MAX_SSE) {
     request(t);
     const use = nearestReady(t);
