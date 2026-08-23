@@ -80,6 +80,11 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 const params = new URLSearchParams(location.search);
+// Where the tile pyramid lives. It is ~half a gigabyte, so it is deliberately not in this repo and
+// not on Pages: point the viewer at whatever host it ends up on with ?tiles=https://host/path/.
+// That host must send CORS headers (Access-Control-Allow-Origin), because the textures are loaded
+// through WebGL and the geometry through fetch().
+const TILE_BASE = (params.get('tiles') || 'tiles/').replace(/\/?$/, '/');
 // pixels of screen-space error a tile may show before the viewer refines into its children
 const MAX_SSE = Number(params.get('sse')) || 2.0;
 const MAX_INFLIGHT = 6;
@@ -493,8 +498,8 @@ function pump() {
     t.state = 'loading';
     stats.inflight++;
     Promise.all([
-      fetch(`tiles/${t.key}.bin`).then(r => r.arrayBuffer()),
-      new Promise(res => loader.load(`tiles/${t.key}.jpg`, res, undefined, () => res(null))),
+      fetch(`${TILE_BASE}${t.key}.bin`).then(r => r.arrayBuffer()),
+      new Promise(res => loader.load(`${TILE_BASE}${t.key}.jpg`, res, undefined, () => res(null))),
     ]).then(([buf, tex]) => {
       const { geometry, tris, bytes } = parseTile(buf);
       if (tex) {
@@ -605,7 +610,7 @@ const boltPromise = fetch('../v2/korno_v2_bolts.json').then(r => (r.ok ? r.json(
 const rejectedPromise = fetch('../v2/korno_v2_bolts_rejected.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
 const routePromise = fetch('../v2/korno_v2_routes.json').then(r => (r.ok ? r.json() : null)).catch(() => null);
 
-fetch('tiles/index.json').then(r => r.json()).then(async index => {
+fetch(`${TILE_BASE}index.json`).then(r => r.json()).then(async index => {
   TILES = {};
   for (const key in index.tiles) {
     const t = index.tiles[key];
@@ -661,7 +666,7 @@ fetch('tiles/index.json').then(r => r.json()).then(async index => {
   console.error(err);
   document.getElementById('bar').style.display = 'none';
   msgEl.className = 'error';
-  msgEl.textContent = 'Could not load tiles/index.json';
+  msgEl.textContent = `Could not load ${TILE_BASE}index.json — pass ?tiles=<url> to point at the tile host`;
 });
 
 renderer.setAnimationLoop(() => {
