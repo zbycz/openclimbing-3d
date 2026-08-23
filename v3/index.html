@@ -86,7 +86,7 @@ const params = new URLSearchParams(location.search);
 // through WebGL and the geometry through fetch().
 const TILE_BASE = (params.get('tiles') || 'tiles/').replace(/\/?$/, '/');
 // pixels of screen-space error a tile may show before the viewer refines into its children
-const MAX_SSE = Number(params.get('sse')) || 2.0;
+const MAX_SSE = Number(params.get('sse')) || 1.5;
 const MAX_INFLIGHT = 6;
 const EVICT_AFTER = 25000;      // ms a tile may stay unused before its GPU memory is released
 
@@ -613,12 +613,13 @@ const routePromise = fetch('../v2/korno_v2_routes.json').then(r => (r.ok ? r.jso
 fetch(`${TILE_BASE}index.json`).then(r => r.json()).then(async index => {
   TILES = {};
   for (const key in index.tiles) {
-    const t = index.tiles[key];
-    TILES[key] = Object.assign(t, { key, box: boxOf(t), children: [], parent: null,
-                                    state: null, mesh: null, used: 0, priority: 0 });
+    const raw = index.tiles[key];
+    // keep the child keys aside: assigning `children: []` onto `raw` would wipe them first
+    TILES[key] = { ...raw, key, box: boxOf(raw), childKeys: raw.children || [],
+                   children: [], parent: null, state: null, mesh: null, used: 0, priority: 0 };
   }
   for (const key in TILES) {
-    TILES[key].children = (index.tiles[key].children || []).map(k => TILES[k]).filter(Boolean);
+    TILES[key].children = TILES[key].childKeys.map(k => TILES[k]).filter(Boolean);
     for (const c of TILES[key].children) c.parent = TILES[key];
   }
   ROOTS = index.roots.map(k => TILES[k]).filter(Boolean);

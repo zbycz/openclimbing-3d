@@ -247,6 +247,10 @@ def core_of(level, i, j, children):
         m += ch
     if len(m.triangles) == 0:
         return None
+    # `+=` concatenates without welding: the children share their seam vertices exactly, and left
+    # unwelded those seams stay boundaries all the way up and the decimator cannot cross them
+    m.remove_duplicated_vertices()
+    m.remove_degenerate_triangles()
     if len(m.triangles) > BUDGET:
         m = m.simplify_quadric_decimation(BUDGET)
     m.compute_vertex_normals()
@@ -305,7 +309,7 @@ def with_skirt(m, depth, level, i, j):
     ring = np.unique(bnd)
     remap = np.full(len(Vm), -1, np.int64)
     remap[ring] = np.arange(len(ring)) + len(Vm)
-    Vs = np.vstack([Vm, Vm[ring] - VIEW.astype(np.float64) * depth])
+    Vs = np.vstack([Vm, Vm[ring] + VIEW.astype(np.float64) * depth])
     Ns = np.vstack([Nm, Nm[ring]])
     a, b = bnd[:, 0], bnd[:, 1]
     quads = np.stack([np.stack([a, b, remap[b]], 1), np.stack([a, remap[b], remap[a]], 1)]).reshape(-1, 3)
@@ -343,9 +347,13 @@ def write_tile(level, i, j, m, err):
         img = img.resize((max(1, round(img.size[0] * s)), max(1, round(img.size[1] * s))), Image.LANCZOS)
     img.save(os.path.join(d, f"{i}_{j}.jpg"), quality=CFG["TEX_Q"], subsampling=0)
 
+    # what one texel of this tile covers in the world; the viewer refines on whichever is worse
+    texel = float(span[0] * UV_SPAN[0] / img.size[0])
+    err = max(err, texel)
+
     bmin, bmax = Vm.min(0), Vm.max(0)
     return {"level": level, "i": i, "j": j,
-            "error": round(err, 5),
+            "error": round(err, 5), "texel": round(texel, 5),
             "verts": int(len(Vm)), "tris": int(len(Fm)),
             # the atlas rect the texture actually covers, so the crop and the uvs cannot drift apart
             "uv": [round(float(lo[0]), 6), round(float(lo[1]), 6),
