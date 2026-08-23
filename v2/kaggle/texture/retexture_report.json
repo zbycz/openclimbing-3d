@@ -1,0 +1,182 @@
+{
+ "cfg": {
+  "INPUT_DIR": "/kaggle/input",
+  "OUT": "/kaggle/working",
+  "TEX_W": 8192,
+  "TILE": 512,
+  "DEPTH_W": 1024,
+  "TOP_K": 3,
+  "BLEND_SHARP": 8.0,
+  "MIN_COS": 0.15,
+  "BORDER": 0.03,
+  "OCCL_REL": 1.004,
+  "OCCL_ABS": 3.0,
+  "GAIN_CLIP": [
+   0.85,
+   1.18
+  ],
+  "TEX_K": 6,
+  "JPEG_Q": 95,
+  "TARGETS": [
+   [
+    "_desmudged",
+    92,
+    8192
+   ],
+   [
+    "_desmudged_light",
+    12,
+    2048
+   ]
+  ]
+ },
+ "timings": {
+  "mesh": 70.9,
+  "uv_frame": 2.1,
+  "position_map": 15.5,
+  "depth_maps": 21.0,
+  "reference_bake": 38.0,
+  "assignment": 206.5,
+  "gains": 28.9,
+  "sampling": 147.0,
+  "metrics": 0.8,
+  "export": 1278.6
+ },
+ "mesh": {
+  "triangles": 17050230,
+  "vertices": 8524051
+ },
+ "atlas": {
+  "width": 8192,
+  "height": 4500,
+  "texel": 0.00184,
+  "uv_span": [
+   15.075,
+   8.281
+  ]
+ },
+ "position_map": {
+  "texels": 36864000,
+  "on_surface": 32695789
+ },
+ "coverage": {
+  "texels_with_photo": 31995419,
+  "pct_of_surface": 97.86
+ },
+ "gains": {
+  "mean": [
+   1.0243,
+   1.0243,
+   1.0469
+  ],
+  "min": [
+   0.85,
+   0.85,
+   0.85
+  ],
+  "max": [
+   1.18,
+   1.18,
+   1.18
+  ]
+ },
+ "texels_from_photos": 31995413,
+ "sharpness_bands_bottom_up": [
+  {
+   "band": 0,
+   "reference": 4.55,
+   "photos": 32.96,
+   "gain": 7.25
+  },
+  {
+   "band": 1,
+   "reference": 7.2,
+   "photos": 37.45,
+   "gain": 5.2
+  },
+  {
+   "band": 2,
+   "reference": 6.42,
+   "photos": 40.38,
+   "gain": 6.29
+  },
+  {
+   "band": 3,
+   "reference": 8.28,
+   "photos": 39.08,
+   "gain": 4.72
+  },
+  {
+   "band": 4,
+   "reference": 10.21,
+   "photos": 39.0,
+   "gain": 3.82
+  },
+  {
+   "band": 5,
+   "reference": 8.21,
+   "photos": 44.08,
+   "gain": 5.37
+  },
+  {
+   "band": 6,
+   "reference": 3.71,
+   "photos": 44.0,
+   "gain": 11.87
+  },
+  {
+   "band": 7,
+   "reference": 2.77,
+   "photos": 44.69,
+   "gain": 16.15
+  },
+  {
+   "band": 8,
+   "reference": 2.21,
+   "photos": 45.53,
+   "gain": 20.64
+  },
+  {
+   "band": 9,
+   "reference": 1.67,
+   "photos": 28.09,
+   "gain": 16.8
+  },
+  {
+   "band": 10,
+   "reference": 1.44,
+   "photos": 19.35,
+   "gain": 13.45
+  },
+  {
+   "band": 11,
+   "reference": 1.24,
+   "photos": 11.21,
+   "gain": 9.03
+  }
+ ],
+ "sharpness_overall": {
+  "reference": 4.824,
+  "photos": 35.483,
+  "gain": 7.355
+ },
+ "outputs": {
+  "korno_v2_desmudged.glb": {
+   "mb": 89.7,
+   "triangles": 2531404,
+   "texture": [
+    8192,
+    4500
+   ]
+  },
+  "korno_v2_desmudged_light.glb": {
+   "mb": 11.6,
+   "triangles": 377004,
+   "texture": [
+    2048,
+    1124
+   ]
+  }
+ },
+ "total_s": 1838
+}
