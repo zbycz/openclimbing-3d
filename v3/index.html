@@ -81,10 +81,11 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 const params = new URLSearchParams(location.search);
 // Where the tile pyramid lives. It is ~half a gigabyte, so it is deliberately not in this repo and
-// not on Pages: point the viewer at whatever host it ends up on with ?tiles=https://host/path/.
+// not on Pages — it is served from filehost.openclimbing.org. Override with ?tiles=https://host/path/.
 // That host must send CORS headers (Access-Control-Allow-Origin), because the textures are loaded
 // through WebGL and the geometry through fetch().
-const TILE_BASE = (params.get('tiles') || 'tiles/').replace(/\/?$/, '/');
+const TILE_BASE = (params.get('tiles') ||
+  'https://filehost.openclimbing.org/korno-tiles/').replace(/\/?$/, '/');
 // pixels of screen-space error a tile may show before the viewer refines into its children
 const MAX_SSE = Number(params.get('sse')) || 1.5;
 const MAX_INFLIGHT = 6;

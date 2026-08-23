@@ -98,12 +98,24 @@ at grazing angles. The gap a skirt has to cover is bounded by that error, so 1.5
 ## Hosting
 
 The pyramid is ~half a gigabyte, which does not fit in the 1 GB GitHub Pages budget alongside
-everything else, so **it is not in this repo** (`v3/tiles/` is gitignored). Put the `tiles/`
-directory anywhere that serves static files with CORS enabled and point the viewer at it:
+everything else, so **it is not in this repo** (`v3/tiles/` is gitignored). It is served from
 
+**https://filehost.openclimbing.org/korno-tiles/**
+
+which is the viewer's default; `?tiles=https://other-host/path/` overrides it. That box runs nginx
+with `root /srv/www`, `Access-Control-Allow-Origin: *` on everything (the viewer fetches geometry
+with `fetch()` and textures through WebGL, both cross-origin from Pages), gzip on `.bin` and
+`.json`, a seven-day `Cache-Control` on tiles and `no-cache` on `index.json` so a rebuilt pyramid
+cannot be read against a stale tree. Cloudflare's tunnel maps the hostname to port 80.
+
+To redeploy after a rebuild:
+
+```bash
+kaggle kernels output pavelzbytovsk/korno-v3-tiles -p ./out
+rsync -a --delete ./out/tiles/ ubuntu@filehost:/srv/www/korno-tiles/
 ```
-v3/index.html?tiles=https://your-host/korno-tiles/
-```
+
+Any static host with CORS works just as well:
 
 The layout is flat and needs no server logic:
 
