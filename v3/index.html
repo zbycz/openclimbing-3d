@@ -27,6 +27,10 @@
   #hud label#unconfirmedRow,
   #hud label#routeNamesRow { margin-top: 3px; margin-left: 16px; color: #9aa3ad; }
   #hud input { vertical-align: middle; margin-right: 6px; }
+  #hud select { background: rgba(255,255,255,.06); color: #c8cdd3; border: 1px solid rgba(255,255,255,.14);
+                border-radius: 5px; font-size: 12px; padding: 1px 4px; margin-left: 4px; }
+  #azimuthRow input { width: 130px; margin-left: 4px; }
+  #azimuthRow.off { display: none; }
   #hint { margin-top: 9px; color: #6b7480; font-size: 12px; }
   #stream { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.09); padding-top: 8px;
             color: #6b7480; font-size: 11.5px; font-variant-numeric: tabular-nums; }
@@ -63,7 +67,15 @@
   <label><input type="checkbox" id="bolts"> show bolts</label>
   <label id="unconfirmedRow"><input type="checkbox" id="unconfirmed"> &nbsp;include unconfirmed</label>
   <label><input type="checkbox" id="cams"> show camera positions</label>
-  <label><input type="checkbox" id="lit" checked> studio light</label>
+  <label id="lightRow">lighting
+    <select id="lighting">
+      <option value="sky">sky — as the wall really is</option>
+      <option value="relief">relief — raking light</option>
+      <option value="sun">sun — artificial</option>
+      <option value="flat">flat — texture only</option>
+    </select>
+  </label>
+  <label id="azimuthRow">&nbsp;direction <input type="range" id="azimuth" min="0" max="360" value="150"></label>
   <label><input type="checkbox" id="invert"> invert mouse axes</label>
   <p id="hint">Drag to orbit · right-drag to pan · scroll to zoom<br>Click a grade to open its route</p>
   <div id="stream"></div>
@@ -147,25 +159,75 @@ invertBox.addEventListener('change', e => {
 
 const pmrem = new THREE.PMREMGenerator(renderer);
 const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environment = envMap;
 const hemi = new THREE.HemisphereLight(0xffffff, 0x40505f, 1.1);
-const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-dir.position.set(0.6, 1.2, -1.4);
-scene.add(hemi, dir);
+const key = new THREE.DirectionalLight(0xffffff, 0.9);
+scene.add(hemi, key);
+
+// The texture carries no baked shadows — the wall faces north and was shot in flat light — which is a
+// nuisance for looking at it and a gift for lighting it: nothing here fights an added light. `sky` is
+// what the wall honestly looks like. `relief` rakes a hard light across it at a grazing angle, which
+// is a tool rather than a picture: it is how you make holds and edges legible. `sun` is openly
+// artificial, warm and higher up, the golden-hour look this wall never actually gets.
+const MODES = {
+  sky:    { env: 1.0, hemi: 1.1, key: 0.9, colour: 0xffffff, elev: 55, exposure: 1.05, unlit: false },
+  relief: { env: 0.6, hemi: 0.7, key: 1.7, colour: 0xffffff, elev: 15, exposure: 1.0,  unlit: false },
+  sun:    { env: 0.5, hemi: 0.6, key: 1.9, colour: 0xffe6bd, elev: 30, exposure: 1.12, unlit: false },
+  flat:   { env: 0.0, hemi: 0.0, key: 0.0, colour: 0xffffff, elev: 55, exposure: 1.0,  unlit: true },
+};
+let MODE = localStorage.getItem('korno.light') || 'sky';
+if (!MODES[MODE]) MODE = 'sky';
+let AZIMUTH = Number(localStorage.getItem('korno.azimuth'));
+if (!Number.isFinite(AZIMUTH)) AZIMUTH = 150;
+// filled in once the model bounds are known, so azimuth 0 sweeps across the face rather than around
+// some arbitrary world axis
+let wallRight = new THREE.Vector3(1, 0, 0);
+let wallUp = new THREE.Vector3(0, -1, 0);
+let wallOut = new THREE.Vector3(0, 0, -1);
+let wallCentre = new THREE.Vector3();
+let wallSize = 1;
+
+function applyMaterial(m) {
+  const cfg = MODES[MODE];
+  m.envMapIntensity = cfg.env * 0.55;
+  m.emissive = new THREE.Color(cfg.unlit ? 0xffffff : 0x000000);
+  m.emissiveMap = cfg.unlit ? m.map : null;
+  m.needsUpdate = true;
+}
+
+function applyLighting() {
+  const cfg = MODES[MODE];
+  scene.environment = cfg.env > 0 ? envMap : null;
+  hemi.intensity = cfg.hemi;
+  key.intensity = cfg.key;
+  key.color.setHex(cfg.colour);
+  renderer.toneMappingExposure = cfg.exposure;
+  const az = THREE.MathUtils.degToRad(AZIMUTH);
+  const el = THREE.MathUtils.degToRad(cfg.elev);
+  const dir = new THREE.Vector3()
+    .addScaledVector(wallRight, Math.cos(el) * Math.cos(az))
+    .addScaledVector(wallOut, Math.cos(el) * Math.sin(az))
+    .addScaledVector(wallUp, Math.sin(el))
+    .normalize();
+  key.position.copy(wallCentre).addScaledVector(dir, wallSize * 3);
+  key.target.position.copy(wallCentre);
+  key.target.updateMatrixWorld();
+  meshes.forEach(m => applyMaterial(m.material));
+  document.getElementById('azimuthRow').classList.toggle('off', MODE === 'flat' || MODE === 'sky');
+}
+
+const lightSel = document.getElementById('lighting');
+const azSlider = document.getElementById('azimuth');
+lightSel.value = MODE;
+azSlider.value = AZIMUTH;
+lightSel.addEventListener('change', e => {
+  MODE = e.target.value; localStorage.setItem('korno.light', MODE); applyLighting();
+});
+azSlider.addEventListener('input', e => {
+  AZIMUTH = Number(e.target.value); localStorage.setItem('korno.azimuth', String(AZIMUTH)); applyLighting();
+});
 
 const meshes = [];
-let LIT = true;                     // tiles arrive continuously, so new ones must match the toggle
-document.getElementById('lit').addEventListener('change', e => {
-  const on = LIT = e.target.checked;
-  scene.environment = on ? envMap : null;
-  hemi.intensity = on ? 2.0 : 0;
-  dir.intensity = on ? 1.1 : 0;
-  meshes.forEach(m => {
-    m.material.emissive = new THREE.Color(on ? 0x000000 : 0xffffff);
-    m.material.emissiveMap = on ? null : m.material.map;
-    m.material.needsUpdate = true;
-  });
-});
+scene.add(key.target);
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -531,7 +593,7 @@ function pump() {
       const mat = new THREE.MeshStandardMaterial({
         map: tex, metalness: 0, roughness: 0.85, envMapIntensity: 0.55,
         side: THREE.DoubleSide });
-      if (!LIT) { mat.emissive = new THREE.Color(0xffffff); mat.emissiveMap = tex; }
+      applyMaterial(mat);            // a tile arriving later must match the current mode
       t.mesh = new THREE.Mesh(geometry, mat);
       t.mesh.frustumCulled = false;
       t.tris = tris;
@@ -583,8 +645,12 @@ function updateTiles() {
   if (!TILES) return;
   projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   frustum.setFromProjectionMatrix(projScreen);
-  // an object of size s at distance d covers s * pixelsPerUnit / d pixels
-  pixelsPerUnit = innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
+  // An object of size s at distance d covers s * pixelsPerUnit / d pixels. This has to count *device*
+  // pixels, not CSS pixels: a phone at devicePixelRatio 3 resolves three times what the CSS height
+  // suggests, so counting CSS pixels made the viewer pick a level far too coarse on mobile — which is
+  // exactly why the first zoom step there changed the picture so violently.
+  pixelsPerUnit = innerHeight * renderer.getPixelRatio()
+                / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
 
   const out = [];
   const seen = new Set();
@@ -661,6 +727,14 @@ fetch(`${TILE_BASE}index.json`).then(r => r.json()).then(async index => {
   controls.target.copy(centre);
   controls.maxDistance = dist * 5;
   controls.update();
+
+  // a frame on the wall itself, so the light's azimuth sweeps across the face
+  wallCentre.copy(centre);
+  wallSize = Math.max(size.x, size.y, size.z);
+  wallOut.subVectors(camera.position, centre).normalize();
+  wallUp.set(0, -1, 0).projectOnPlane(wallOut).normalize();
+  wallRight.crossVectors(wallUp, wallOut).normalize();
+  applyLighting();
 
   const sceneSize = Math.max(size.x, size.y);
   const meta = await metaPromise;

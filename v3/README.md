@@ -50,14 +50,36 @@ Three details make it work:
   triangles under it to its own decimated surface. The viewer turns that into a screen-space error,
   so refinement follows measured deviation rather than a guess about level.
 
+## Lighting
+
+The texture carries no baked shadows — the wall faces north and was shot in flat light — which is a
+nuisance for looking at it and a gift for lighting it: nothing here fights an added light, the way it
+would on a model with golden-hour shadows painted in. Four modes, in the HUD:
+
+| | |
+|---|---|
+| `sky` | hemisphere plus an environment map. What the wall honestly looks like. Default. |
+| `relief` | a hard light raked across the face at 15°, direction on a slider. A tool, not a picture: it is how edges and holds become legible. |
+| `sun` | warm key at 30°, openly artificial — this wall never gets direct sun. |
+| `flat` | unlit, texture only. What the photo bake actually produced, with no shading on top. |
+
+Rendering is ACES filmic with an environment map either way; two bare lights and no tone mapping
+made a photogrammetry texture look like wallpaper.
+
 ## The viewer
 
 `index.html` walks the tree every frame:
 
 ```
-sse = error * (viewportHeight / (2 tan(fov/2))) / distanceToBox
-refine into children when sse > MAX_SSE  (default 2 px, override with ?sse=)
+sse = error * (viewportHeight * devicePixelRatio / (2 tan(fov/2))) / distanceToBox
+refine into children when sse > MAX_SSE  (default 0.7 px, override with ?sse=)
+children are requested at 0.45 x that, so they are usually there before they are needed
 ```
+
+`devicePixelRatio` matters more than it looks. Counting CSS pixels made a phone at DPR 3 pick a level
+far too coarse: the initial view came up as **2 tiles at level 0** where a desktop got level 1, and
+the first zoom step then jumped two levels at once. Counting device pixels puts the phone on level 1
+from the start.
 
 A node keeps being drawn until **all** of its visible children have arrived, so refinement never
 punches a hole — the "replacement refinement with parent fallback" that 3D Tiles uses. Requests are
