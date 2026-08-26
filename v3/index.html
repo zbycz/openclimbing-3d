@@ -99,17 +99,15 @@ const params = new URLSearchParams(location.search);
 // through WebGL and the geometry through fetch().
 const TILE_BASE = (params.get('tiles') ||
   'https://filehost.openclimbing.org/korno-tiles/').replace(/\/?$/, '/');
-// Pixels of screen-space error a tile may show before the viewer refines into its children. A tile's
+// Pixels of screen-space error a tile may show before the view steps to the next level. A tile's
 // error is dominated by its texel size, so this is really "how far may a tile texture be magnified" —
 // anything above ~1 is visibly soft, because the texture was downsampled to make the tile in the
-// first place. Children are requested at PREFETCH x this, so they are usually there before they are
-// needed rather than arriving as a jump.
+// first place.
 //
 // Fading a tile in was tried and removed: an opacity ramp needs depthWrite off, and tiles that do
 // not write depth stop occluding each other, so you see straight through them to the coarser
-// surface behind. With refinement this eager the pops are small enough not to need hiding.
+// surface behind.
 const MAX_SSE = Number(params.get('sse')) || 0.7;
-const PREFETCH = 0.45;
 const MAX_INFLIGHT = 10;
 const EVICT_AFTER = 25000;      // ms a tile may stay unused before its GPU memory is released
 
@@ -541,7 +539,8 @@ const loader = new THREE.TextureLoader();
 const MAXANISO = renderer.capabilities.getMaxAnisotropy();
 
 let TILES = null, ROOTS = [], VERSION = '';
-const stats = { loaded: 0, bytes: 0, drawn: 0, tris: 0, inflight: 0 };
+let byLevel = [], LEVELS = 1;
+const stats = { loaded: 0, bytes: 0, drawn: 0, tris: 0, inflight: 0, level: 0 };
 const streamEl = document.getElementById('stream');
 
 function boxOf(t) {
@@ -614,47 +613,72 @@ function nearestReady(t) {
   return t;
 }
 
-function select(t, out, seen) {
-  if (!frustum.intersectsBox(t.box)) return;
-  const dist = Math.max(t.box.distanceToPoint(camera.position), 1e-4);
-  t.priority = 1 / dist;
-  const sse = t.error * pixelsPerUnit / dist;
-  const kids = t.children;
-  // start pulling the next level in well before it is needed
-  if (kids.length && sse > MAX_SSE * PREFETCH) {
-    for (const c of kids) if (frustum.intersectsBox(c.box)) request(c);
+// One level for the whole frustum.
+//
+// Refining tile by tile on its own screen-space error is what a 3D-Tiles traversal does, and on this
+// wall it looks wrong: neighbouring tiles land on different levels, so a sharp tile sits next to a
+// soft one with a hard line between them, and the line moves as you turn. Picking a single level for
+// everything on screen trades some bandwidth for a picture that is uniformly sharp.
+//
+// The level chosen is the coarsest whose worst visible tile still meets MAX_SSE, so nothing on screen
+// is under-resolved; MAX_TILES stops a grazing view — where the far end of the wall is in frame with
+// the near end — from demanding the leaf level across the whole face.
+const MAX_TILES = 140;
+let chosenLevel = 0;
+
+function visibleAt(level) {
+  const out = [];
+  for (const t of byLevel[level] || []) if (frustum.intersectsBox(t.box)) out.push(t);
+  return out;
+}
+
+function pickLevel() {
+  let chosen = 0;
+  for (let L = 0; L < LEVELS; L++) {
+    const vis = visibleAt(L);
+    if (!vis.length) break;
+    chosen = L;
+    let worst = 0;
+    for (const t of vis) {
+      const d = Math.max(t.box.distanceToPoint(camera.position), 1e-4);
+      t.priority = 1 / d;
+      worst = Math.max(worst, t.error * pixelsPerUnit / d);
+    }
+    if (worst <= MAX_SSE) break;                       // this level is already good enough
+    if (L + 1 >= LEVELS) break;
+    if (visibleAt(L + 1).length > MAX_TILES) break;    // finer would cost more than it is worth
   }
-  if (!kids.length || sse <= MAX_SSE) {
-    request(t);
-    const use = nearestReady(t);
-    if (use && !seen.has(use)) { seen.add(use); out.push(use); }
-    return;
-  }
-  const visible = kids.filter(c => frustum.intersectsBox(c.box));
-  if (visible.length && visible.every(c => c.state === 'ready')) {
-    for (const c of kids) select(c, out, seen);
-  } else {
-    for (const c of visible) request(c);
-    request(t);
-    const use = nearestReady(t);
-    if (use && !seen.has(use)) { seen.add(use); out.push(use); }
-  }
+  return chosen;
 }
 
 function updateTiles() {
   if (!TILES) return;
+  camera.updateMatrixWorld();
   projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   frustum.setFromProjectionMatrix(projScreen);
-  // An object of size s at distance d covers s * pixelsPerUnit / d pixels. This has to count *device*
+  // an object of size s at distance d covers s * pixelsPerUnit / d pixels. This has to count *device*
   // pixels, not CSS pixels: a phone at devicePixelRatio 3 resolves three times what the CSS height
   // suggests, so counting CSS pixels made the viewer pick a level far too coarse on mobile — which is
   // exactly why the first zoom step there changed the picture so violently.
   pixelsPerUnit = innerHeight * renderer.getPixelRatio()
                 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
 
+  chosenLevel = pickLevel();
+  const want = visibleAt(chosenLevel);
+  for (const t of want) request(t);
+  // pull the next level in early, so switching to it is not a wait
+  if (chosenLevel + 1 < LEVELS) {
+    const next = visibleAt(chosenLevel + 1);
+    if (next.length <= MAX_TILES) for (const t of next) request(t);
+  }
+
+  // until a tile arrives, stand in its nearest loaded ancestor rather than leaving a hole
   const out = [];
   const seen = new Set();
-  for (const r of ROOTS) select(r, out, seen);
+  for (const t of want) {
+    const use = nearestReady(t);
+    if (use && !seen.has(use)) { seen.add(use); out.push(use); }
+  }
 
   const now = performance.now();
   for (const t of out) t.used = now;
@@ -665,7 +689,7 @@ function updateTiles() {
     if (t.mesh.parent !== tileGroup) { t.mesh.tile = t; tileGroup.add(t.mesh); }
     tris += t.tris;
   }
-  stats.drawn = out.length; stats.tris = tris;
+  stats.drawn = out.length; stats.tris = tris; stats.level = chosenLevel;
   pump();
 }
 
@@ -690,7 +714,8 @@ function drawStats(now) {
   if (now - statsAt < 250) return;
   statsAt = now;
   streamEl.innerHTML =
-    `<b>${(stats.tris / 1e6).toFixed(2)} M</b> triangles on screen · <b>${stats.drawn}</b> tiles<br>` +
+    `<b>${(stats.tris / 1e6).toFixed(2)} M</b> triangles on screen · <b>${stats.drawn}</b> tiles ` +
+    `at level <b>${stats.level}</b><br>` +
     `<b>${(stats.bytes / 1048576).toFixed(1)} MB</b> downloaded · ${stats.loaded} cached` +
     (stats.inflight ? ` · ${stats.inflight} loading` : '');
 }
@@ -715,6 +740,9 @@ fetch(`${TILE_BASE}index.json`).then(r => r.json()).then(async index => {
     for (const c of TILES[key].children) c.parent = TILES[key];
   }
   ROOTS = index.roots.map(k => TILES[k]).filter(Boolean);
+  LEVELS = index.levels;
+  byLevel = Array.from({ length: LEVELS }, () => []);
+  for (const key in TILES) byLevel[TILES[key].level].push(TILES[key]);
 
   const box = new THREE.Box3();
   for (const r of ROOTS) box.union(r.box);

@@ -71,10 +71,18 @@ made a photogrammetry texture look like wallpaper.
 `index.html` walks the tree every frame:
 
 ```
-sse = error * (viewportHeight * devicePixelRatio / (2 tan(fov/2))) / distanceToBox
-refine into children when sse > MAX_SSE  (default 0.7 px, override with ?sse=)
-children are requested at 0.45 x that, so they are usually there before they are needed
+sse   = error * (viewportHeight * devicePixelRatio / (2 tan(fov/2))) / distanceToBox
+level = the coarsest whose worst visible tile still meets MAX_SSE   (default 0.7 px, ?sse= to override)
 ```
+
+**One level for the whole frustum.** Refining tile by tile on its own error is what a 3D-Tiles
+traversal does, and on a wall it looks wrong: neighbours land on different levels, so a sharp tile
+sits beside a soft one with a hard line between them, and the line moves as you turn. Choosing a
+single level for everything on screen costs some bandwidth and gives a picture that is uniformly
+sharp. The level is the coarsest that leaves nothing on screen under-resolved, and a 140-tile budget
+stops a grazing view — where the far end of the wall is in frame with the near end — from demanding
+the leaf level across the whole face. The next level down is prefetched wholesale, so stepping to it
+is not a wait.
 
 `devicePixelRatio` matters more than it looks. Counting CSS pixels made a phone at DPR 3 pick a level
 far too coarse: the initial view came up as **2 tiles at level 0** where a desktop got level 1, and
