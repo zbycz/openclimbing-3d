@@ -31,10 +31,11 @@
   #models { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.09); padding-top: 8px; }
   #models .row { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
   #models .row > span { color: #6b7480; font-size: 11.5px; width: 46px; flex: none; }
-  #models a { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px;
-              color: #9aa3ad; text-decoration: none; border: 1px solid rgba(255,255,255,.12); }
-  #models a:hover { color: #e8eaed; border-color: rgba(255,255,255,.3); }
-  #models a.on { color: #0b0d10; background: #8fb3e8; border-color: #8fb3e8; font-weight: 600; }
+  #models .pill { display: inline-block; padding: 2px 8px; border-radius: 999px;
+                  font: inherit; font-size: 11.5px; line-height: 1.5; cursor: pointer;
+                  color: #9aa3ad; background: none; border: 1px solid rgba(255,255,255,.12); }
+  #models .pill:hover { color: #e8eaed; border-color: rgba(255,255,255,.3); }
+  #models .pill.on { color: #0b0d10; background: #8fb3e8; border-color: #8fb3e8; font-weight: 600; }
   #status { position: fixed; inset: 0; display: grid; place-content: center; place-items: center; gap: 10px;
             text-align: center; z-index: 20; pointer-events: none; }
   #status.hidden { display: none; }
@@ -42,6 +43,13 @@
   #bar i { display: block; height: 100%; width: 0; background: #6ea8fe; transition: width .2s; }
   #msg { color: #9aa3ad; font-size: 13px; }
   #msg.error { color: #ff8b8b; max-width: 80vw; pointer-events: auto; }
+  #upgrade { position: fixed; right: 12px; top: 12px; z-index: 10; display: flex; align-items: center;
+             gap: 8px; background: rgba(12, 15, 20, .72); backdrop-filter: blur(8px);
+             border: 1px solid rgba(255, 255, 255, .1); border-radius: 8px; padding: 7px 10px;
+             font-size: 11.5px; color: #9aa3ad; pointer-events: none; }
+  #upgrade[hidden] { display: none; }
+  #ubar { width: 84px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .14); overflow: hidden; }
+  #ubar i { display: block; height: 100%; width: 0; background: #6ea8fe; transition: width .2s; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -74,6 +82,7 @@
 </div>
 
 <div id="status"><div id="bar"><i></i></div><div id="msg">loading…</div></div>
+<div id="upgrade" hidden><div id="ubar"><i></i></div><span id="umsg">full detail…</span></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -83,27 +92,31 @@ import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
-// The same geometry twice, textured two different ways: `_desmudged` samples the original photos
-// per texel, the other bakes the colours of the dense points and goes soft wherever those points
-// thin out. `bytes` are the real uncompressed sizes — Pages gzips the GLB, so the browser counts
-// decompressed bytes against a compressed Content-Length and the progress bar would overshoot.
-const MODELS = [
-  { f: 'korno_v2_desmudged.glb',       tex: 'photos',      det: 'full',  bytes: 94014176 },
-  { f: 'korno_v2_desmudged_light.glb', tex: 'photos',      det: 'light', bytes: 12122376 },
-  { f: 'korno_v2.glb',                 tex: 'point cloud', det: 'full',  bytes: 94374136 },
-  { f: 'korno_v2_light.glb',           tex: 'point cloud', det: 'light', bytes: 11715528 },
-];
-const params = new URLSearchParams(location.search);
-const FILE = params.get('f') || MODELS[0].f;
-const CURRENT = MODELS.find(m => m.f === FILE) || MODELS[0];
-const SIZES = Object.fromEntries(MODELS.map(m => [m.f, m.bytes]));
+// One geometry, two decimations of the same photo-sampled bake. The page opens on the light one and
+// pulls the full one in behind it once the view is close enough for the difference to show. `bytes`
+// are the real uncompressed sizes — Pages gzips the GLB, so the browser counts decompressed bytes
+// against a compressed Content-Length and the progress bar would overshoot.
+const LIGHT = { f: 'korno_v2_desmudged_light.glb', bytes: 12122376, label: 'light · 12 MB' };
+const FULL  = { f: 'korno_v2_desmudged.glb',       bytes: 94014176, label: 'full · 90 MB' };
 
-const pills = (key, fixed) => MODELS.filter(m => m[fixed] === CURRENT[fixed]).map(m =>
-  `<a class="pill${m.f === CURRENT.f ? ' on' : ''}" href="?f=${m.f}">${m[key]}` +
-  `${key === 'det' && m.bytes ? ` · ${Math.round(m.bytes / 1048576)} MB` : ''}</a>`).join('');
-document.getElementById('models').innerHTML =
-  `<div class="row"><span>texture</span>${pills('tex', 'det')}</div>` +
-  `<div class="row"><span>detail</span>${pills('det', 'tex')}</div>`;
+const params = new URLSearchParams(location.search);
+const asked = params.get('f');
+const FORCED = asked === 'full' || asked === FULL.f ? FULL
+             : asked === 'light' || asked === LIGHT.f ? LIGHT : null;
+
+const detailEl = document.getElementById('models');
+detailEl.innerHTML = '<div class="row"><span>detail</span>' +
+  [LIGHT, FULL].map(m => `<button class="pill" data-f="${m.f}">${m.label}</button>`).join('') +
+  '</div>';
+const updatePills = () => [LIGHT, FULL].forEach(m =>
+  detailEl.querySelector(`[data-f="${m.f}"]`).classList.toggle('on', m === live));
+detailEl.addEventListener('click', e => {
+  const b = e.target.closest('.pill');
+  if (!b) return;
+  const m = b.dataset.f === FULL.f ? FULL : LIGHT;
+  failed.delete(m);
+  ensure(m);
+});
 
 const hud = document.getElementById('hud');
 const collapseBtn = document.getElementById('collapse');
@@ -151,16 +164,17 @@ dir.position.set(0.6, 1.2, -1.4);
 scene.add(hemi, dir);
 
 const meshes = [];
-document.getElementById('lit').addEventListener('change', e => {
-  const on = e.target.checked;
+const litBox = document.getElementById('lit');
+const applyLit = (on, list) => {
   hemi.intensity = on ? 2.0 : 0;
   dir.intensity = on ? 1.1 : 0;
-  meshes.forEach(m => {
+  (list || meshes).forEach(m => {
     m.material.emissive = new THREE.Color(on ? 0x000000 : 0xffffff);
     m.material.emissiveMap = on ? null : m.material.map;
     m.material.needsUpdate = true;
   });
-});
+};
+litBox.addEventListener('change', e => applyLit(e.target.checked));
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
@@ -475,79 +489,149 @@ const routePromise = fetch('korno_v2_routes.json')
   .then(r => (r.ok ? r.json() : null))
   .catch(() => null);
 
-new GLTFLoader().load(FILE,
-  async gltf => {
-    const root = gltf.scene;
-    scene.add(root);
-    root.traverse(n => {
-      if (!n.isMesh) return;
-      meshes.push(n);
-      n.material.metalness = 0;
-      n.material.roughness = 1;
-      n.material.side = THREE.DoubleSide;
-      if (n.material.map) n.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    });
+const loader = new GLTFLoader();
+const mb = n => (n / 1048576).toFixed(0);
+const loadGLB = (m, onProgress) => new Promise((resolve, reject) => loader.load(m.f, resolve,
+  ev => onProgress(ev.loaded, m.bytes || (ev.lengthComputable && ev.total >= ev.loaded ? ev.total : 0)),
+  reject));
 
-    const box = new THREE.Box3().setFromObject(root);
-    const centre = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    // fit both axes: a wide wall in a wide window is limited by width, not height
-    const halfV = Math.tan(Math.PI * 25 / 180);
-    const dist = 1.12 * Math.max(size.y / 2 / halfV, size.x / 2 / (camera.aspect * halfV));
-    camera.up.set(0, -1, 0);                 // the reconstruction's world is y-down
-    camera.position.set(centre.x, centre.y, centre.z - dist);
-    controls.target.copy(centre);
-    controls.maxDistance = dist * 5;
-    controls.update();
+const roots = new Map();
+let live = null, baseDist = 0, subMeta = '', loading = null;
+const failed = new Set();
 
-    let tris = 0;
-    root.traverse(n => { if (n.isMesh) tris += n.geometry.index.count / 3; });
-
-    const meta = await metaPromise;
-    if (meta) buildCameras(meta, Math.max(size.x, size.y));
-    else camToggle.closest('label').style.display = 'none';
-
-    const boltMeta = await boltPromise;
-    if (boltMeta && boltMeta.bolts.length) {
-      buildBolts(boltMeta, await rejectedPromise, Math.max(size.x, size.y));
-    } else {
-      boltToggle.closest('label').style.display = 'none';
-      document.getElementById('unconfirmedRow').style.display = 'none';
-    }
-
-    const routeMeta = await routePromise;
-    if (routeMeta && routeMeta.routes.length) {
-      buildRoutes(routeMeta, Math.max(size.x, size.y));
-    } else {
-      routeToggle.closest('label').style.display = 'none';
-      document.getElementById('routeNamesRow').style.display = 'none';
-    }
-
-    document.getElementById('sub').textContent =
-      `${(tris / 1e6).toFixed(2)}M triangles${meta ? ` · ${meta.cameras.length} photos` : ''}` +
-      `${boltMeta ? ` · ${boltMeta.count} bolts` : ''}` +
-      `${routeMeta ? ` · ${routeMeta.count} routes` : ''}`;
-    statusEl.classList.add('hidden');
-  },
-  ev => {
-    const total = SIZES[FILE] || (ev.lengthComputable && ev.total >= ev.loaded ? ev.total : 0);
-    const mb = n => (n / 1048576).toFixed(0);
-    if (total) {
-      barEl.style.width = Math.min(100, 100 * ev.loaded / total) + '%';
-      msgEl.textContent = `loading… ${mb(ev.loaded)} / ${mb(total)} MB`;
-    } else {
-      msgEl.textContent = `loading… ${mb(ev.loaded)} MB`;
-    }
-  },
-  err => {
-    console.error(err);
-    document.getElementById('bar').style.display = 'none';
-    msgEl.className = 'error';
-    msgEl.textContent = 'Could not load ' + FILE;
+function prepare(root) {
+  const fresh = [];
+  let tris = 0;
+  root.traverse(n => {
+    if (!n.isMesh) return;
+    fresh.push(n);
+    meshes.push(n);
+    n.material.metalness = 0;
+    n.material.roughness = 1;
+    n.material.side = THREE.DoubleSide;
+    if (n.material.map) n.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    tris += n.geometry.index.count / 3;
   });
+  applyLit(litBox.checked, fresh);
+  root.userData.tris = tris;
+  return root;
+}
+
+function setSub() {
+  document.getElementById('sub').textContent =
+    `${(roots.get(live).userData.tris / 1e6).toFixed(2)}M triangles${subMeta}`;
+}
+
+function swapTo(m) {
+  if (live === m || !roots.has(m)) return;
+  live = m;
+  for (const [key, root] of roots) root.visible = key === m;
+  updatePills();
+  setSub();
+}
+
+const upEl = document.getElementById('upgrade');
+const uBarEl = document.querySelector('#ubar i');
+const uMsgEl = document.getElementById('umsg');
+
+// fetch a model behind the one on screen and swap it in, reporting into the corner loader
+async function ensure(m) {
+  if (roots.has(m)) { swapTo(m); return; }
+  if (loading) return;
+  loading = m;
+  upEl.hidden = false;
+  uBarEl.style.width = '0%';
+  uMsgEl.textContent = `${m.label.split(' ')[0]} detail…`;
+  try {
+    const gltf = await loadGLB(m, (loaded, total) => {
+      uBarEl.style.width = Math.min(100, 100 * loaded / (total || m.bytes)) + '%';
+      uMsgEl.textContent = `${m.label.split(' ')[0]} detail ${mb(loaded)} / ${mb(total || m.bytes)} MB`;
+    });
+    const root = prepare(gltf.scene);
+    scene.add(root);
+    roots.set(m, root);
+    // compile() only walks *visible* objects, so the new texture has to be uploaded while the old
+    // model is still shown, and the swap has to follow in the same tick — otherwise the first frame
+    // of the new model is the one that stalls on the upload.
+    renderer.compile(scene, camera);
+    swapTo(m);
+    upEl.hidden = true;
+  } catch (err) {
+    console.error(err);
+    failed.add(m);
+    uMsgEl.textContent = 'load failed';
+    setTimeout(() => { upEl.hidden = true; }, 5000);
+  }
+  loading = null;
+}
+
+const first = FORCED || LIGHT;
+const firstLoad = loadGLB(first, (loaded, total) => {
+  if (total) {
+    barEl.style.width = Math.min(100, 100 * loaded / total) + '%';
+    msgEl.textContent = `loading… ${mb(loaded)} / ${mb(total)} MB`;
+  } else {
+    msgEl.textContent = `loading… ${mb(loaded)} MB`;
+  }
+});
+
+firstLoad.then(async gltf => {
+  const root = prepare(gltf.scene);
+  scene.add(root);
+  roots.set(first, root);
+  live = first;
+  updatePills();
+
+  const box = new THREE.Box3().setFromObject(root);
+  const centre = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  // fit both axes: a wide wall in a wide window is limited by width, not height
+  const halfV = Math.tan(Math.PI * 25 / 180);
+  baseDist = 1.12 * Math.max(size.y / 2 / halfV, size.x / 2 / (camera.aspect * halfV));
+  camera.up.set(0, -1, 0);                 // the reconstruction's world is y-down
+  camera.position.set(centre.x, centre.y, centre.z - baseDist);
+  controls.target.copy(centre);
+  controls.maxDistance = baseDist * 5;
+  controls.update();
+
+  const meta = await metaPromise;
+  if (meta) buildCameras(meta, Math.max(size.x, size.y));
+  else camToggle.closest('label').style.display = 'none';
+
+  const boltMeta = await boltPromise;
+  if (boltMeta && boltMeta.bolts.length) {
+    buildBolts(boltMeta, await rejectedPromise, Math.max(size.x, size.y));
+  } else {
+    boltToggle.closest('label').style.display = 'none';
+    document.getElementById('unconfirmedRow').style.display = 'none';
+  }
+
+  const routeMeta = await routePromise;
+  if (routeMeta && routeMeta.routes.length) {
+    buildRoutes(routeMeta, Math.max(size.x, size.y));
+  } else {
+    routeToggle.closest('label').style.display = 'none';
+    document.getElementById('routeNamesRow').style.display = 'none';
+  }
+
+  subMeta = `${meta ? ` · ${meta.cameras.length} photos` : ''}` +
+    `${boltMeta ? ` · ${boltMeta.count} bolts` : ''}` +
+    `${routeMeta ? ` · ${routeMeta.count} routes` : ''}`;
+  setSub();
+  statusEl.classList.add('hidden');
+});
+
+firstLoad.catch(err => {
+  console.error(err);
+  document.getElementById('bar').style.display = 'none';
+  msgEl.className = 'error';
+  msgEl.textContent = 'Could not load ' + first.f;
+});
 
 renderer.setAnimationLoop(() => {
   controls.update();
+  if (baseDist && !FORCED && !failed.has(FULL) && !roots.has(FULL) &&
+      camera.position.distanceTo(controls.target) < baseDist * 0.5) ensure(FULL);
   pushOutlineBack();
   renderer.render(scene, camera);
   drawLabels();

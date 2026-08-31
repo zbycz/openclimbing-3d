@@ -13,9 +13,9 @@ v2/kaggle/bolts|bolts3d|routes|texture/    CPU kernels for the metadata and the 
 ```
 
 **The model to serve is `korno_v2_desmudged.glb`** — 90 MB, 2 531 404 triangles, 8192 × 4500 texture
-baked from the photos. It is the viewer's default. `korno_v2.glb` (same geometry, the old
-point-cloud bake) stays in the repo only for the `texture:` switch; `*_light.glb` are the 12 MB
-versions.
+baked from the photos, with `korno_v2_desmudged_light.glb` (12 MB, 377 004 triangles) as the first
+paint. The old point-cloud bake (`korno_v2.glb`, `korno_v2_light.glb`) is gone: it was only ever
+reachable through a `texture:` switch in the viewer, and it is strictly worse.
 
 ## Working rules
 

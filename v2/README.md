@@ -38,13 +38,14 @@ kaggle kernels logs pavelzbytovsk/korno-v2-mvs --follow
 | registered | 102 / 103 photos, 172 952 sparse points, 1.35 px reprojection error |
 | dense cloud | 5 249 666 measured points (one depth estimate per pixel, cross-checked between views) |
 | raw mesh | 17 050 230 triangles |
-| `korno_v2.glb` | 90 MiB — 3 000 000 triangles, 8192 × 4500 texture |
-| `korno_v2_light.glb` | 11 MiB — 380 000 triangles, 2048 × 1124 texture |
+| `korno_v2.glb` | 90 MiB — 3 000 000 triangles, 8192 × 4500 texture *(point-cloud bake, no longer served)* |
+| `korno_v2_light.glb` | 11 MiB — 380 000 triangles, 2048 × 1124 texture *(no longer served)* |
 | `korno_v2_desmudged.glb` | 90 MiB — 2 531 404 triangles, same texture size, **baked from the photos** |
 | `korno_v2_desmudged_light.glb` | 12 MiB — 377 004 triangles, 2048 × 1124 |
 | runtime | 2 h 21 m on one P100 (80 min of that is dense stereo), + 31 min CPU for the re-texture |
 
-The viewer's `texture` switch loads either bake over the same geometry.
+The viewer opens on `korno_v2_desmudged_light.glb` and fetches `korno_v2_desmudged.glb` in the
+background once the camera has closed to half the framing distance, swapping the two in place.
 
 ## Getting CUDA COLMAP onto Kaggle
 
