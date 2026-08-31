@@ -125,7 +125,7 @@ const applyCollapse = on => {
   collapseBtn.setAttribute('aria-expanded', String(!on));
   collapseBtn.title = on ? 'expand' : 'collapse';
 };
-applyCollapse(localStorage.getItem('korno.hud') === 'collapsed');
+applyCollapse(localStorage.getItem('korno.hud') !== 'open');
 collapseBtn.addEventListener('click', () => {
   const on = !hud.classList.contains('collapsed');
   applyCollapse(on);
